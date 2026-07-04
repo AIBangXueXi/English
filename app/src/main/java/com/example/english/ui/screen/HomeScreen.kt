@@ -35,7 +35,12 @@ import androidx.compose.ui.unit.sp
 import com.example.english.ui.theme.EnglishTheme
 
 @Composable
-fun HomeScreen() {
+fun HomeScreen(
+    onWordClick: () -> Unit = {},
+    onPhraseClick: () -> Unit = {},
+    onReadClick: () -> Unit = {},
+    onDictionaryClick: () -> Unit = {}
+) {
     Scaffold { innerPadding ->
         Column(
             modifier = Modifier
@@ -58,13 +63,13 @@ fun HomeScreen() {
             )
             Spacer(modifier = Modifier.height(32.dp))
             ModuleRow(
-                module1 = ModuleItem("背单词", "每日词汇记忆训练", Icons.Rounded.School),
-                module2 = ModuleItem("学短语", "常用短语搭配练习", Icons.Rounded.FormatQuote),
+                module1 = ModuleItem("背单词", "每日词汇记忆训练", Icons.Rounded.School, onWordClick),
+                module2 = ModuleItem("学短语", "常用短语搭配练习", Icons.Rounded.FormatQuote, onPhraseClick),
             )
             Spacer(modifier = Modifier.height(16.dp))
             ModuleRow(
-                module1 = ModuleItem("读短文", "阅读英文原版短篇", Icons.AutoMirrored.Rounded.MenuBook),
-                module2 = ModuleItem("本地词库", "管理你的专属词汇", Icons.Rounded.Bookmarks),
+                module1 = ModuleItem("读短文", "阅读英文原版短篇", Icons.AutoMirrored.Rounded.MenuBook, onReadClick),
+                module2 = ModuleItem("本地词库", "管理你的专属词汇", Icons.Rounded.Bookmarks, onDictionaryClick),
             )
         }
     }
@@ -73,7 +78,8 @@ fun HomeScreen() {
 data class ModuleItem(
     val title: String,
     val subtitle: String,
-    val icon: ImageVector
+    val icon: ImageVector,
+    val onClick: () -> Unit = {}
 )
 
 @Composable
@@ -90,7 +96,7 @@ private fun ModuleRow(module1: ModuleItem, module2: ModuleItem) {
 @Composable
 fun ModuleCard(item: ModuleItem, modifier: Modifier = Modifier) {
     Card(
-        onClick = { /* TODO: navigate */ },
+        onClick = item.onClick,
         modifier = modifier,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
