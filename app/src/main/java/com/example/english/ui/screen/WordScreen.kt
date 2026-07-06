@@ -5,10 +5,17 @@ import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,13 +23,16 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.Button
@@ -96,6 +106,9 @@ fun WordScreen(
     var hasActiveRecording by remember { mutableStateOf(false) }
     var hasPcmData by remember { mutableStateOf(false) }
     var isPlaying by remember { mutableStateOf(false) }
+    var isCorrect by remember { mutableStateOf(false) }
+    var showCelebration by remember { mutableStateOf(false) }
+    var showRetryHint by remember { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scope = rememberCoroutineScope()
@@ -112,6 +125,9 @@ fun WordScreen(
             recognizedText = null
             errorMessage = null
             hasPcmData = false
+            isCorrect = false
+            showCelebration = false
+            showRetryHint = false
             try {
                 speechService.startRecording()
             } catch (e: Exception) {
@@ -124,9 +140,17 @@ fun WordScreen(
             isRecording = false
             isProcessing = true
             scope.launch {
-                speechService.stopAndRecognize()
-                    .onSuccess { text -> recognizedText = text }
-                    .onFailure { e -> errorMessage = e.message }
+                val result = speechService.stopAndRecognize()
+                result.onSuccess { text ->
+                    recognizedText = text
+                    if (text.trim() == word.meaning.trim()) {
+                        isCorrect = true
+                        showCelebration = true
+                        revealed = true
+                    } else {
+                        showRetryHint = true
+                    }
+                }.onFailure { e -> errorMessage = e.message }
                 hasPcmData = speechService.lastPcmData != null
                 isProcessing = false
             }
@@ -302,6 +326,30 @@ fun WordScreen(
                 }
             }
 
+            // Celebration overlay
+            AnimatedVisibility(
+                visible = showCelebration,
+                enter = scaleIn(animationSpec = tween(400)) + fadeIn(animationSpec = tween(400)),
+                exit = fadeOut(animationSpec = tween(300))
+            ) {
+                CelebrationBanner(
+                    visible = showCelebration,
+                    onFinished = { showCelebration = false }
+                )
+            }
+
+            // Retry hint
+            AnimatedVisibility(
+                visible = showRetryHint,
+                enter = fadeIn(animationSpec = tween(300)),
+                exit = fadeOut(animationSpec = tween(300))
+            ) {
+                RetryBanner(
+                    visible = showRetryHint,
+                    onFinished = { showRetryHint = false }
+                )
+            }
+
             Spacer(modifier = Modifier.weight(0.75f))
 
             if (!revealed) {
@@ -344,6 +392,129 @@ fun WordScreen(
             }
 
             Spacer(modifier = Modifier.height(32.dp))
+        }
+    }
+}
+
+@Composable
+private fun CelebrationBanner(visible: Boolean, onFinished: () -> Unit) {
+    val starColors = listOf(
+        Color(0xFFFFD700), Color(0xFFFF6B6B), Color(0xFF4FC3F7),
+        Color(0xFF81C784), Color(0xFFFFB74D), Color(0xFFBA68C8)
+    )
+
+    val scale by animateFloatAsState(
+        targetValue = if (visible) 1f else 0.5f,
+        animationSpec = tween(500)
+    )
+
+    // Auto-dismiss after celebration
+    if (visible) {
+        LaunchedEffect(Unit) {
+            kotlinx.coroutines.delay(2500)
+            onFinished()
+        }
+    }
+
+    Box(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            // Confetti particles
+            Box(modifier = Modifier.fillMaxWidth().height(48.dp)) {
+                starColors.forEachIndexed { i, color ->
+                    val xOffset = ((i.toFloat() - 2.5f) * 60).dp
+                    val delay = i * 100L
+                    val animScale by animateFloatAsState(
+                        targetValue = if (visible) 1f else 0f,
+                        animationSpec = tween(600, delayMillis = delay.toInt())
+                    )
+                    Box(
+                        modifier = Modifier
+                            .offset(x = xOffset)
+                            .size((12 * animScale).dp)
+                            .background(color, CircleShape)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Checkmark icon
+            Icon(
+                imageVector = Icons.Rounded.Check,
+                contentDescription = null,
+                modifier = Modifier.size((48 * scale).dp),
+                tint = Color(0xFF4CAF50)
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // "说对了!" text
+            Text(
+                text = "说对了!",
+                style = MaterialTheme.typography.headlineSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = (28 * scale).sp
+                ),
+                color = Color(0xFF4CAF50),
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+@Composable
+private fun RetryBanner(visible: Boolean, onFinished: () -> Unit) {
+    val shakeOffset = remember { Animatable(0f) }
+    val alpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(400)
+    )
+
+    if (visible) {
+        LaunchedEffect(Unit) {
+            // Shake: left → right → left → right → center
+            shakeOffset.animateTo(-12f, spring(dampingRatio = 0.3f, stiffness = 800f))
+            shakeOffset.animateTo(12f, spring(dampingRatio = 0.3f, stiffness = 800f))
+            shakeOffset.animateTo(-8f, spring(dampingRatio = 0.3f, stiffness = 800f))
+            shakeOffset.animateTo(8f, spring(dampingRatio = 0.3f, stiffness = 800f))
+            shakeOffset.animateTo(0f, spring(dampingRatio = 0.3f, stiffness = 800f))
+            kotlinx.coroutines.delay(1200)
+            onFinished()
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+            .offset(x = shakeOffset.value.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = "🤔",
+                style = MaterialTheme.typography.displaySmall.copy(fontSize = 36.sp)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "再想一想...",
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 18.sp
+                ),
+                color = Color(0xFFFF9800),
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "长按按钮再试一次",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }
