@@ -42,6 +42,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -109,6 +110,8 @@ fun WordScreen(
     var isCorrect by remember { mutableStateOf(false) }
     var showCelebration by remember { mutableStateOf(false) }
     var showRetryHint by remember { mutableStateOf(false) }
+    var manualInput by remember { mutableStateOf("") }
+    var manualResult by remember { mutableStateOf<String?>(null) }
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scope = rememberCoroutineScope()
@@ -353,6 +356,56 @@ fun WordScreen(
             Spacer(modifier = Modifier.weight(0.75f))
 
             if (!revealed) {
+                // Manual input field
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = manualInput,
+                        onValueChange = { manualInput = it; manualResult = null },
+                        modifier = Modifier.weight(1f),
+                        placeholder = { Text("手动输入单词意思") },
+                        singleLine = true
+                    )
+                    Button(
+                        onClick = {
+                            val input = manualInput.trim()
+                            if (input.isNotEmpty()) {
+                                if (input == word.meaning.trim()) {
+                                    isCorrect = true
+                                    showCelebration = true
+                                    revealed = true
+                                    manualResult = null
+                                } else {
+                                    manualResult = "不正确，再试试"
+                                }
+                            }
+                        },
+                        shape = RoundedCornerShape(14.dp),
+                        enabled = manualInput.isNotBlank()
+                    ) {
+                        Text("确认", fontSize = 14.sp)
+                    }
+                }
+
+                // Manual result feedback
+                AnimatedVisibility(
+                    visible = manualResult != null,
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
+                    Text(
+                        text = manualResult ?: "",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
