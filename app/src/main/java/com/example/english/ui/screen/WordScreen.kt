@@ -64,6 +64,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.english.data.QuizState
+import com.example.english.data.WordViewModel
 import com.example.english.speech.SpeechService
 import com.example.english.ui.theme.EnglishTheme
 import kotlinx.coroutines.Dispatchers
@@ -95,10 +98,11 @@ private val syllableColors = listOf(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WordScreen(
-    word: Word,
+    viewModel: WordViewModel,
     speechService: SpeechService,
     onBack: () -> Unit
 ) {
+    val quizState by viewModel.state.collectAsStateWithLifecycle()
     var revealed by remember { mutableStateOf(false) }
     var isRecording by remember { mutableStateOf(false) }
     var isProcessing by remember { mutableStateOf(false) }
@@ -112,16 +116,36 @@ fun WordScreen(
     var showRetryHint by remember { mutableStateOf(false) }
     var manualInput by remember { mutableStateOf("") }
     var manualResult by remember { mutableStateOf<String?>(null) }
+    var answerRecorded by remember { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scope = rememberCoroutineScope()
     var playJob by remember { mutableStateOf<Job?>(null) }
+
+    // Reset state when word changes
+    val currentWord = (quizState as? QuizState.Active)?.word
+    LaunchedEffect(currentWord) {
+        revealed = false
+        isRecording = false
+        isProcessing = false
+        recognizedText = null
+        errorMessage = null
+        hasActiveRecording = false
+        hasPcmData = false
+        isCorrect = false
+        showCelebration = false
+        showRetryHint = false
+        manualInput = ""
+        manualResult = null
+        answerRecorded = false
+    }
 
     DisposableEffect(Unit) {
         onDispose { playJob?.cancel() }
     }
 
     LaunchedEffect(isPressed) {
+        val word = currentWord ?: return@LaunchedEffect
         if (isPressed && !revealed) {
             hasActiveRecording = true
             isRecording = true
@@ -150,6 +174,10 @@ fun WordScreen(
                         isCorrect = true
                         showCelebration = true
                         revealed = true
+                        if (!answerRecorded) {
+                            answerRecorded = true
+                            viewModel.onCorrectAnswer()
+                        }
                     } else {
                         showRetryHint = true
                     }
@@ -175,276 +203,362 @@ fun WordScreen(
             )
         }
     ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(horizontal = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Spacer(modifier = Modifier.weight(0.2f))
-
-            SyllableWord(word.syllables, revealed)
-
-            if (revealed) {
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Text(
-                    text = word.phonetic,
-                    style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                Text(
-                    text = "${word.partOfSpeech}  ${word.meaning}",
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 22.sp
-                    ),
-                    color = MaterialTheme.colorScheme.onBackground,
-                    textAlign = TextAlign.Center
-                )
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Recording indicator
-            AnimatedVisibility(
-                visible = isRecording,
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
-                Text(
-                    text = "正在录音...",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = Color(0xFFE53935),
-                    fontWeight = FontWeight.Medium
-                )
-            }
-
-            // Processing indicator
-            AnimatedVisibility(
-                visible = isProcessing,
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+        when (quizState) {
+            is QuizState.Loading -> {
+                Box(
+                    modifier = Modifier.fillMaxSize().padding(innerPadding),
+                    contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.dp
-                    )
-                    Text(
-                        text = "识别中...",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator()
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("加载单词中...", style = MaterialTheme.typography.bodyLarge)
+                    }
                 }
             }
 
-            // Recognition result + play button
-            AnimatedVisibility(
-                visible = recognizedText != null && !isProcessing,
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(vertical = 8.dp)
+            is QuizState.Complete -> {
+                Box(
+                    modifier = Modifier.fillMaxSize().padding(innerPadding),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "你说的是：",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = recognizedText ?: "",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 20.sp
-                        ),
-                        color = MaterialTheme.colorScheme.primary,
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    PlayButton(
-                        hasData = hasPcmData,
-                        isPlaying = isPlaying,
-                        onPlay = {
-                            isPlaying = true
-                            playJob = scope.launch {
-                                playPcm(speechService.lastPcmData)
-                                isPlaying = false
-                            }
-                        },
-                        onStop = {
-                            playJob?.cancel()
-                            isPlaying = false
-                        }
-                    )
-                }
-            }
-
-            // Error message
-            AnimatedVisibility(
-                visible = errorMessage != null && !isProcessing,
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                ) {
-                    Text(
-                        text = errorMessage ?: "",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
-                        textAlign = TextAlign.Center
-                    )
-
-                    if (hasPcmData) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("🎉", style = MaterialTheme.typography.displayMedium)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            "全部单词已学完！",
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                        )
                         Spacer(modifier = Modifier.height(8.dp))
-                        PlayButton(
-                            hasData = true,
-                            isPlaying = isPlaying,
-                            onPlay = {
-                                isPlaying = true
-                                playJob = scope.launch {
-                                    playPcm(speechService.lastPcmData)
-                                    isPlaying = false
-                                }
-                            },
-                            onStop = {
-                                playJob?.cancel()
-                                isPlaying = false
-                            }
+                        Text(
+                            "休息一下，明天再来",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(32.dp))
+                        Button(onClick = onBack, shape = RoundedCornerShape(14.dp)) {
+                            Text("返回首页")
+                        }
+                    }
+                }
+            }
+
+            is QuizState.Error -> {
+                Box(
+                    modifier = Modifier.fillMaxSize().padding(innerPadding),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = (quizState as QuizState.Error).message,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(onClick = { viewModel.loadNextWord() }, shape = RoundedCornerShape(14.dp)) {
+                            Text("重试")
+                        }
+                    }
+                }
+            }
+
+            is QuizState.Active -> {
+                val active = quizState as QuizState.Active
+                val word = active.word
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .padding(horizontal = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Review badge
+                    if (active.isReview) {
+                        Text(
+                            text = "复习 · 待巩固 ${active.unknownCount} 词",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFFFF9800),
+                            modifier = Modifier.padding(top = 8.dp)
                         )
                     }
-                }
-            }
 
-            // Celebration overlay
-            AnimatedVisibility(
-                visible = showCelebration,
-                enter = scaleIn(animationSpec = tween(400)) + fadeIn(animationSpec = tween(400)),
-                exit = fadeOut(animationSpec = tween(300))
-            ) {
-                CelebrationBanner(
-                    visible = showCelebration,
-                    onFinished = { showCelebration = false }
-                )
-            }
+                    Spacer(modifier = Modifier.weight(0.2f))
 
-            // Retry hint
-            AnimatedVisibility(
-                visible = showRetryHint,
-                enter = fadeIn(animationSpec = tween(300)),
-                exit = fadeOut(animationSpec = tween(300))
-            ) {
-                RetryBanner(
-                    visible = showRetryHint,
-                    onFinished = { showRetryHint = false }
-                )
-            }
+                    SyllableWord(word.syllables, revealed)
 
-            Spacer(modifier = Modifier.weight(0.75f))
+                    if (revealed) {
+                        Spacer(modifier = Modifier.height(12.dp))
 
-            if (!revealed) {
-                // Manual input field
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedTextField(
-                        value = manualInput,
-                        onValueChange = { manualInput = it; manualResult = null },
-                        modifier = Modifier.weight(1f),
-                        placeholder = { Text("手动输入单词意思") },
-                        singleLine = true
-                    )
-                    Button(
-                        onClick = {
-                            val input = manualInput.trim()
-                            if (input.isNotEmpty()) {
-                                if (input == word.meaning.trim()) {
-                                    isCorrect = true
-                                    showCelebration = true
-                                    revealed = true
-                                    manualResult = null
-                                } else {
-                                    manualResult = "不正确，再试试"
+                        Text(
+                            text = word.phonetic,
+                            style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Spacer(modifier = Modifier.height(20.dp))
+
+                        Text(
+                            text = "${word.partOfSpeech}  ${word.meaning}".trim(),
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 22.sp
+                            ),
+                            color = MaterialTheme.colorScheme.onBackground,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    // Recording indicator
+                    AnimatedVisibility(
+                        visible = isRecording,
+                        enter = fadeIn(),
+                        exit = fadeOut()
+                    ) {
+                        Text(
+                            text = "正在录音...",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = Color(0xFFE53935),
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+
+                    // Processing indicator
+                    AnimatedVisibility(
+                        visible = isProcessing,
+                        enter = fadeIn(),
+                        exit = fadeOut()
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp
+                            )
+                            Text(
+                                text = "识别中...",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    // Recognition result + play button
+                    AnimatedVisibility(
+                        visible = recognizedText != null && !isProcessing,
+                        enter = fadeIn(),
+                        exit = fadeOut()
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = "你说的是：",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = recognizedText ?: "",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 20.sp
+                                ),
+                                color = MaterialTheme.colorScheme.primary,
+                                textAlign = TextAlign.Center
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            PlayButton(
+                                hasData = hasPcmData,
+                                isPlaying = isPlaying,
+                                onPlay = {
+                                    isPlaying = true
+                                    playJob = scope.launch {
+                                        playPcm(speechService.lastPcmData)
+                                        isPlaying = false
+                                    }
+                                },
+                                onStop = {
+                                    playJob?.cancel()
+                                    isPlaying = false
                                 }
+                            )
+                        }
+                    }
+
+                    // Error message
+                    AnimatedVisibility(
+                        visible = errorMessage != null && !isProcessing,
+                        enter = fadeIn(),
+                        exit = fadeOut()
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = errorMessage ?: "",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error,
+                                textAlign = TextAlign.Center
+                            )
+
+                            if (hasPcmData) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                PlayButton(
+                                    hasData = true,
+                                    isPlaying = isPlaying,
+                                    onPlay = {
+                                        isPlaying = true
+                                        playJob = scope.launch {
+                                            playPcm(speechService.lastPcmData)
+                                            isPlaying = false
+                                        }
+                                    },
+                                    onStop = {
+                                        playJob?.cancel()
+                                        isPlaying = false
+                                    }
+                                )
                             }
-                        },
-                        shape = RoundedCornerShape(14.dp),
-                        enabled = manualInput.isNotBlank()
-                    ) {
-                        Text("确认", fontSize = 14.sp)
-                    }
-                }
-
-                // Manual result feedback
-                AnimatedVisibility(
-                    visible = manualResult != null,
-                    enter = fadeIn(),
-                    exit = fadeOut()
-                ) {
-                    Text(
-                        text = manualResult ?: "",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = {},
-                        modifier = Modifier.weight(1f).height(52.dp),
-                        interactionSource = interactionSource,
-                        shape = RoundedCornerShape(14.dp),
-                        enabled = !isProcessing
-                    ) {
-                        Text(if (isRecording) "松开识别" else "说意思", fontSize = 16.sp)
+                        }
                     }
 
-                    Button(
-                        onClick = { revealed = true },
-                        modifier = Modifier.weight(1f).height(52.dp),
-                        shape = RoundedCornerShape(14.dp)
+                    // Celebration overlay
+                    AnimatedVisibility(
+                        visible = showCelebration,
+                        enter = scaleIn(animationSpec = tween(400)) + fadeIn(animationSpec = tween(400)),
+                        exit = fadeOut(animationSpec = tween(300))
                     ) {
-                        Text("不认识", fontSize = 16.sp)
+                        CelebrationBanner(
+                            visible = showCelebration,
+                            onFinished = { showCelebration = false }
+                        )
                     }
-                }
-            } else {
-                Button(
-                    onClick = { /* TODO: next word */ },
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                    shape = RoundedCornerShape(14.dp)
-                ) {
-                    Text("下一个", fontSize = 16.sp)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp)
-                    )
+
+                    // Retry hint
+                    AnimatedVisibility(
+                        visible = showRetryHint,
+                        enter = fadeIn(animationSpec = tween(300)),
+                        exit = fadeOut(animationSpec = tween(300))
+                    ) {
+                        RetryBanner(
+                            visible = showRetryHint,
+                            onFinished = { showRetryHint = false }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.weight(0.75f))
+
+                    if (!revealed) {
+                        // Manual input field
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = manualInput,
+                                onValueChange = { manualInput = it; manualResult = null },
+                                modifier = Modifier.weight(1f),
+                                placeholder = { Text("手动输入单词意思") },
+                                singleLine = true
+                            )
+                            Button(
+                                onClick = {
+                                    val input = manualInput.trim()
+                                    if (input.isNotEmpty()) {
+                                        if (input == word.meaning.trim()) {
+                                            isCorrect = true
+                                            showCelebration = true
+                                            revealed = true
+                                            manualResult = null
+                                            if (!answerRecorded) {
+                                                answerRecorded = true
+                                                viewModel.onCorrectAnswer()
+                                            }
+                                        } else {
+                                            manualResult = "不正确，再试试"
+                                        }
+                                    }
+                                },
+                                shape = RoundedCornerShape(14.dp),
+                                enabled = manualInput.isNotBlank()
+                            ) {
+                                Text("确认", fontSize = 14.sp)
+                            }
+                        }
+
+                        // Manual result feedback
+                        AnimatedVisibility(
+                            visible = manualResult != null,
+                            enter = fadeIn(),
+                            exit = fadeOut()
+                        ) {
+                            Text(
+                                text = manualResult ?: "",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {},
+                                modifier = Modifier.weight(1f).height(52.dp),
+                                interactionSource = interactionSource,
+                                shape = RoundedCornerShape(14.dp),
+                                enabled = !isProcessing
+                            ) {
+                                Text(if (isRecording) "松开识别" else "说意思", fontSize = 16.sp)
+                            }
+
+                            Button(
+                                onClick = {
+                                    revealed = true
+                                    if (!answerRecorded) {
+                                        answerRecorded = true
+                                        viewModel.onWrongAnswer()
+                                    }
+                                },
+                                modifier = Modifier.weight(1f).height(52.dp),
+                                shape = RoundedCornerShape(14.dp)
+                            ) {
+                                Text("不认识", fontSize = 16.sp)
+                            }
+                        }
+                    } else {
+                        Button(
+                            onClick = { viewModel.loadNextWord() },
+                            modifier = Modifier.fillMaxWidth().height(52.dp),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Text("下一个", fontSize = 16.sp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(32.dp))
                 }
             }
-
-            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 }

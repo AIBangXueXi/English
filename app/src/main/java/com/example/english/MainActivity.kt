@@ -13,10 +13,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.english.data.WordViewModel
 import com.example.english.speech.SpeechService
 import com.example.english.ui.screen.HomeScreen
-import com.example.english.ui.screen.Syllable
-import com.example.english.ui.screen.Word
 import com.example.english.ui.screen.WordScreen
 import com.example.english.ui.theme.EnglishTheme
 
@@ -43,27 +43,18 @@ class MainActivity : ComponentActivity() {
                     is Screen.Home -> HomeScreen(
                         onWordClick = {
                             ensureAudioPermission {
-                                currentScreen = Screen.WordPage(
-                                    Word(
-                                        word = "expensive",
-                                        phonetic = "/ɪkˈspensɪv/",
-                                        meaning = "昂贵的",
-                                        partOfSpeech = "adj.",
-                                        syllables = listOf(
-                                            Syllable("ex", "/ɪkˈs/"),
-                                            Syllable("pen", "/pen/"),
-                                            Syllable("sive", "/sɪv/")
-                                        )
-                                    )
-                                )
+                                currentScreen = Screen.WordPage
                             }
                         }
                     )
-                    is Screen.WordPage -> WordScreen(
-                        word = screen.word,
-                        speechService = speechService,
-                        onBack = { currentScreen = Screen.Home }
-                    )
+                    is Screen.WordPage -> {
+                        val wordViewModel: WordViewModel = viewModel()
+                        WordScreen(
+                            viewModel = wordViewModel,
+                            speechService = speechService,
+                            onBack = { currentScreen = Screen.Home }
+                        )
+                    }
                 }
             }
         }
@@ -82,5 +73,5 @@ class MainActivity : ComponentActivity() {
 
 sealed class Screen {
     data object Home : Screen()
-    data class WordPage(val word: Word) : Screen()
+    data object WordPage : Screen()
 }
