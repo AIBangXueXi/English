@@ -4,6 +4,7 @@ import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
+import android.media.MediaPlayer
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
@@ -15,8 +16,8 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,14 +28,18 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Stop
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -44,6 +49,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -67,6 +73,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.english.data.QuizState
 import com.example.english.data.WordViewModel
+import com.example.english.data.api.DeepSeekService
 import com.example.english.speech.SpeechService
 import com.example.english.ui.theme.EnglishTheme
 import kotlinx.coroutines.Dispatchers
@@ -85,9 +92,22 @@ data class Word(
     val word: String,
     val phonetic: String,
     val meaning: String,
-    val partOfSpeech: String,
-    val syllables: List<Syllable> = emptyList()
-)
+    val pronunciation: String = "",
+    val etymology: List<String> = emptyList(),
+    val etymologyPhonetic: List<String> = emptyList(),
+    val etymologyPronunciation: List<String> = emptyList(),
+    val plural: String = "",
+    val thirdPersonSingular: String = "",
+    val presentParticiple: String = "",
+    val pastTense: String = "",
+    val categoryName: String = "",
+    val remark: String = ""
+) {
+    val syllables: List<Syllable>
+        get() = if (etymology.isNotEmpty() && etymologyPhonetic.isNotEmpty())
+            etymology.zip(etymologyPhonetic).map { (text, ph) -> Syllable(text, ph) }
+        else emptyList()
+}
 
 private val syllableColors = listOf(
     Color(0xFF4A90D9),
@@ -117,12 +137,15 @@ fun WordScreen(
     var manualInput by remember { mutableStateOf("") }
     var manualResult by remember { mutableStateOf<String?>(null) }
     var answerRecorded by remember { mutableStateOf(false) }
+    var isAiChecking by remember { mutableStateOf(false) }
+    var isPlayingPronunciation by remember { mutableStateOf(false) }
+    var pronunciationJob by remember { mutableStateOf<Job?>(null) }
+    var pronunciationPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scope = rememberCoroutineScope()
     var playJob by remember { mutableStateOf<Job?>(null) }
 
-    // Reset state when word changes
     val currentWord = (quizState as? QuizState.Active)?.word
     LaunchedEffect(currentWord) {
         revealed = false
@@ -138,10 +161,18 @@ fun WordScreen(
         manualInput = ""
         manualResult = null
         answerRecorded = false
+        isPlayingPronunciation = false
+        isAiChecking = false
+        pronunciationPlayer?.release()
+        pronunciationPlayer = null
     }
 
     DisposableEffect(Unit) {
-        onDispose { playJob?.cancel() }
+        onDispose {
+            playJob?.cancel()
+            pronunciationJob?.cancel()
+            pronunciationPlayer?.release()
+        }
     }
 
     LaunchedEffect(isPressed) {
@@ -155,6 +186,7 @@ fun WordScreen(
             isCorrect = false
             showCelebration = false
             showRetryHint = false
+            isAiChecking = false
             try {
                 speechService.startRecording()
             } catch (e: Exception) {
@@ -170,7 +202,7 @@ fun WordScreen(
                 val result = speechService.stopAndRecognize()
                 result.onSuccess { text ->
                     recognizedText = text
-                    if (text.trim() == word.meaning.trim()) {
+                    if (word.meaning.trim().contains(text.trim())) {
                         isCorrect = true
                         showCelebration = true
                         revealed = true
@@ -179,7 +211,22 @@ fun WordScreen(
                             viewModel.onCorrectAnswer()
                         }
                     } else {
-                        showRetryHint = true
+                        isAiChecking = true
+                        val aiMatch = DeepSeekService.compareMeaning(
+                            text.trim(), word.meaning.trim()
+                        )
+                        isAiChecking = false
+                        if (aiMatch) {
+                            isCorrect = true
+                            showCelebration = true
+                            revealed = true
+                            if (!answerRecorded) {
+                                answerRecorded = true
+                                viewModel.onCorrectAnswer()
+                            }
+                        } else {
+                            showRetryHint = true
+                        }
                     }
                 }.onFailure { e -> errorMessage = e.message }
                 hasPcmData = speechService.lastPcmData != null
@@ -195,6 +242,14 @@ fun WordScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "返回")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { viewModel.resetProgress() }) {
+                        Icon(
+                            Icons.Rounded.Refresh,
+                            contentDescription = "重置进度"
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -267,153 +322,284 @@ fun WordScreen(
                 val active = quizState as QuizState.Active
                 val word = active.word
 
-                Column(
+                Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(innerPadding)
-                        .padding(horizontal = 24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Review badge
-                    if (active.isReview) {
+                    // Scrollable content
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 24.dp)
+                            .verticalScroll(rememberScrollState()),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        // Category badge
+                        if (word.categoryName.isNotEmpty()) {
+                            Surface(
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.padding(top = 16.dp)
+                            ) {
+                                Text(
+                                    text = word.categoryName,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                        }
+
+                        // Review badge
+                        if (active.isReview) {
+                            Text(
+                                text = "复习 · 待巩固 ${active.unknownCount} 词",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFFFF9800),
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(40.dp))
+
+                        // The full word
                         Text(
-                            text = "复习 · 待巩固 ${active.unknownCount} 词",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFFFF9800),
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.weight(0.2f))
-
-                    SyllableWord(word.syllables, revealed)
-
-                    if (revealed) {
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Text(
-                            text = word.phonetic,
-                            style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-
-                        Spacer(modifier = Modifier.height(20.dp))
-
-                        Text(
-                            text = "${word.partOfSpeech}  ${word.meaning}".trim(),
-                            style = MaterialTheme.typography.titleLarge.copy(
-                                fontWeight = FontWeight.Medium,
-                                fontSize = 22.sp
+                            text = word.word,
+                            style = MaterialTheme.typography.displaySmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 36.sp
                             ),
                             color = MaterialTheme.colorScheme.onBackground,
                             textAlign = TextAlign.Center
                         )
-                    }
 
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    // Recording indicator
-                    AnimatedVisibility(
-                        visible = isRecording,
-                        enter = fadeIn(),
-                        exit = fadeOut()
-                    ) {
-                        Text(
-                            text = "正在录音...",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = Color(0xFFE53935),
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-
-                    // Processing indicator
-                    AnimatedVisibility(
-                        visible = isProcessing,
-                        enter = fadeIn(),
-                        exit = fadeOut()
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp
-                            )
-                            Text(
-                                text = "识别中...",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                        // Etymology breakdown
+                        if (word.syllables.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(24.dp))
+                            EtymologyBreakdown(word.syllables, revealed)
                         }
-                    }
 
-                    // Recognition result + play button
-                    AnimatedVisibility(
-                        visible = recognizedText != null && !isProcessing,
-                        enter = fadeIn(),
-                        exit = fadeOut()
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(vertical = 8.dp)
-                        ) {
+                        if (revealed) {
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            // Phonetic + pronunciation audio
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = word.phonetic,
+                                    style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                if (word.pronunciation.isNotEmpty()) {
+                                    IconButton(
+                                        onClick = {
+                                            if (isPlayingPronunciation) {
+                                                pronunciationJob?.cancel()
+                                                pronunciationPlayer?.apply {
+                                                    try { stop() } catch (_: Exception) {}
+                                                    release()
+                                                }
+                                                pronunciationPlayer = null
+                                                isPlayingPronunciation = false
+                                            } else {
+                                                isPlayingPronunciation = true
+                                                pronunciationJob = scope.launch {
+                                                    val success = playPronunciation(word.pronunciation)
+                                                    isPlayingPronunciation = false
+                                                    pronunciationPlayer = null
+                                                }
+                                            }
+                                        },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isPlayingPronunciation) Icons.Rounded.Stop else Icons.Rounded.VolumeUp,
+                                            contentDescription = if (isPlayingPronunciation) "停止" else "发音",
+                                            modifier = Modifier.size(20.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            // Translation
                             Text(
-                                text = "你说的是：",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = recognizedText ?: "",
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 20.sp
+                                text = word.meaning,
+                                style = MaterialTheme.typography.titleLarge.copy(
+                                    fontWeight = FontWeight.Medium,
+                                    fontSize = 22.sp
                                 ),
-                                color = MaterialTheme.colorScheme.primary,
+                                color = MaterialTheme.colorScheme.onBackground,
                                 textAlign = TextAlign.Center
                             )
 
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            PlayButton(
-                                hasData = hasPcmData,
-                                isPlaying = isPlaying,
-                                onPlay = {
-                                    isPlaying = true
-                                    playJob = scope.launch {
-                                        playPcm(speechService.lastPcmData)
-                                        isPlaying = false
+                            // Word forms
+                            val forms = buildList {
+                                if (word.plural.isNotEmpty()) add("复数: ${word.plural}")
+                                if (word.thirdPersonSingular.isNotEmpty()) add("三单: ${word.thirdPersonSingular}")
+                                if (word.presentParticiple.isNotEmpty()) add("现在分词: ${word.presentParticiple}")
+                                if (word.pastTense.isNotEmpty()) add("过去式: ${word.pastTense}")
+                            }
+                            if (forms.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(20.dp))
+                                Surface(
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(16.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Text(
+                                            text = "词形变化",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(bottom = 8.dp)
+                                        )
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            forms.forEach { form ->
+                                                Surface(
+                                                    color = MaterialTheme.colorScheme.secondaryContainer,
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    modifier = Modifier.weight(1f)
+                                                ) {
+                                                    Text(
+                                                        text = form,
+                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        textAlign = TextAlign.Center,
+                                                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                                                    )
+                                                }
+                                            }
+                                        }
                                     }
-                                },
-                                onStop = {
-                                    playJob?.cancel()
-                                    isPlaying = false
                                 }
-                            )
-                        }
-                    }
+                            }
 
-                    // Error message
-                    AnimatedVisibility(
-                        visible = errorMessage != null && !isProcessing,
-                        enter = fadeIn(),
-                        exit = fadeOut()
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(vertical = 8.dp)
+                            // Remark
+                            if (word.remark.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = word.remark,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(
+                                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                                            RoundedCornerShape(8.dp)
+                                        )
+                                        .padding(12.dp)
+                                )
+                            }
+                        }
+
+                        // Status indicators
+                        AnimatedVisibility(
+                            visible = manualResult != null,
+                            enter = fadeIn(),
+                            exit = fadeOut()
                         ) {
                             Text(
-                                text = errorMessage ?: "",
+                                text = manualResult ?: "",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.error,
-                                textAlign = TextAlign.Center
+                                modifier = Modifier.padding(top = 8.dp)
                             )
+                        }
 
-                            if (hasPcmData) {
+                        AnimatedVisibility(
+                            visible = isRecording,
+                            enter = fadeIn(),
+                            exit = fadeOut()
+                        ) {
+                            Text(
+                                text = "正在录音...",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = Color(0xFFE53935),
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+
+                        AnimatedVisibility(
+                            visible = isProcessing,
+                            enter = fadeIn(),
+                            exit = fadeOut()
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Text(
+                                    text = "识别中...",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        AnimatedVisibility(
+                            visible = isAiChecking,
+                            enter = fadeIn(),
+                            exit = fadeOut()
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Text(
+                                    text = "AI 验证中...",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        AnimatedVisibility(
+                            visible = recognizedText != null && !isProcessing && !isAiChecking,
+                            enter = fadeIn(),
+                            exit = fadeOut()
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            ) {
+                                Text(
+                                    text = "你说的是：",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = recognizedText ?: "",
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 20.sp
+                                    ),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    textAlign = TextAlign.Center
+                                )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 PlayButton(
-                                    hasData = true,
+                                    hasData = hasPcmData,
                                     isPlaying = isPlaying,
                                     onPlay = {
                                         isPlaying = true
@@ -429,121 +615,178 @@ fun WordScreen(
                                 )
                             }
                         }
-                    }
 
-                    // Celebration overlay
-                    AnimatedVisibility(
-                        visible = showCelebration,
-                        enter = scaleIn(animationSpec = tween(400)) + fadeIn(animationSpec = tween(400)),
-                        exit = fadeOut(animationSpec = tween(300))
-                    ) {
-                        CelebrationBanner(
-                            visible = showCelebration,
-                            onFinished = { showCelebration = false }
-                        )
-                    }
-
-                    // Retry hint
-                    AnimatedVisibility(
-                        visible = showRetryHint,
-                        enter = fadeIn(animationSpec = tween(300)),
-                        exit = fadeOut(animationSpec = tween(300))
-                    ) {
-                        RetryBanner(
-                            visible = showRetryHint,
-                            onFinished = { showRetryHint = false }
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.weight(0.75f))
-
-                    if (!revealed) {
-                        // Manual input field
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            OutlinedTextField(
-                                value = manualInput,
-                                onValueChange = { manualInput = it; manualResult = null },
-                                modifier = Modifier.weight(1f),
-                                placeholder = { Text("手动输入单词意思") },
-                                singleLine = true
-                            )
-                            Button(
-                                onClick = {
-                                    val input = manualInput.trim()
-                                    if (input.isNotEmpty()) {
-                                        if (input == word.meaning.trim()) {
-                                            isCorrect = true
-                                            showCelebration = true
-                                            revealed = true
-                                            manualResult = null
-                                            if (!answerRecorded) {
-                                                answerRecorded = true
-                                                viewModel.onCorrectAnswer()
-                                            }
-                                        } else {
-                                            manualResult = "不正确，再试试"
-                                        }
-                                    }
-                                },
-                                shape = RoundedCornerShape(14.dp),
-                                enabled = manualInput.isNotBlank()
-                            ) {
-                                Text("确认", fontSize = 14.sp)
-                            }
-                        }
-
-                        // Manual result feedback
                         AnimatedVisibility(
-                            visible = manualResult != null,
+                            visible = errorMessage != null && !isProcessing,
                             enter = fadeIn(),
                             exit = fadeOut()
                         ) {
-                            Text(
-                                text = manualResult ?: "",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.padding(top = 8.dp)
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            ) {
+                                Text(
+                                    text = errorMessage ?: "",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.error,
+                                    textAlign = TextAlign.Center
+                                )
+                                if (hasPcmData) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    PlayButton(
+                                        hasData = true,
+                                        isPlaying = isPlaying,
+                                        onPlay = {
+                                            isPlaying = true
+                                            playJob = scope.launch {
+                                                playPcm(speechService.lastPcmData)
+                                                isPlaying = false
+                                            }
+                                        },
+                                        onStop = {
+                                            playJob?.cancel()
+                                            isPlaying = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        // Celebration overlay
+                        AnimatedVisibility(
+                            visible = showCelebration,
+                            enter = scaleIn(animationSpec = tween(400)) + fadeIn(animationSpec = tween(400)),
+                            exit = fadeOut(animationSpec = tween(300))
+                        ) {
+                            CelebrationBanner(
+                                visible = showCelebration,
+                                onFinished = { showCelebration = false }
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        // Retry hint
+                        AnimatedVisibility(
+                            visible = showRetryHint,
+                            enter = fadeIn(animationSpec = tween(300)),
+                            exit = fadeOut(animationSpec = tween(300))
                         ) {
-                            OutlinedButton(
-                                onClick = {},
-                                modifier = Modifier.weight(1f).height(52.dp),
-                                interactionSource = interactionSource,
-                                shape = RoundedCornerShape(14.dp),
-                                enabled = !isProcessing
+                            RetryBanner(
+                                visible = showRetryHint,
+                                onFinished = { showRetryHint = false }
+                            )
+                        }
+
+                        // Bottom spacer to avoid overlap with fixed buttons
+                        Spacer(modifier = Modifier.height(140.dp))
+                    }
+
+                    // Fixed buttons at bottom-right for thumb reach
+                    if (!revealed) {
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(end = 12.dp, bottom = 8.dp)
+                                .width(280.dp),
+                            horizontalAlignment = Alignment.End
+                        ) {
+                            // Manual input
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Text(if (isRecording) "松开识别" else "说意思", fontSize = 16.sp)
+                                OutlinedTextField(
+                                    value = manualInput,
+                                    onValueChange = { manualInput = it; manualResult = null },
+                                    modifier = Modifier.weight(1f).height(52.dp),
+                                    placeholder = { Text("手动输入单词意思", fontSize = 13.sp) },
+                                    singleLine = true,
+                                    textStyle = MaterialTheme.typography.bodyMedium
+                                )
+                                Button(
+                                    onClick = {
+                                        val input = manualInput.trim()
+                                        if (input.isNotEmpty()) {
+                                            if (word.meaning.trim().contains(input)) {
+                                                isCorrect = true
+                                                showCelebration = true
+                                                revealed = true
+                                                manualResult = null
+                                                if (!answerRecorded) {
+                                                    answerRecorded = true
+                                                    viewModel.onCorrectAnswer()
+                                                }
+                                            } else {
+                                                scope.launch {
+                                                    isAiChecking = true
+                                                    val aiMatch = DeepSeekService.compareMeaning(
+                                                        input, word.meaning.trim()
+                                                    )
+                                                    isAiChecking = false
+                                                    if (aiMatch) {
+                                                        isCorrect = true
+                                                        showCelebration = true
+                                                        revealed = true
+                                                        manualResult = null
+                                                        if (!answerRecorded) {
+                                                            answerRecorded = true
+                                                            viewModel.onCorrectAnswer()
+                                                        }
+                                                    } else {
+                                                        manualResult = "不正确，再试试"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(14.dp),
+                                    enabled = manualInput.isNotBlank(),
+                                    modifier = Modifier.height(52.dp)
+                                ) {
+                                    Text("确认", fontSize = 14.sp)
+                                }
                             }
 
-                            Button(
-                                onClick = {
-                                    revealed = true
-                                    if (!answerRecorded) {
-                                        answerRecorded = true
-                                        viewModel.onWrongAnswer()
-                                    }
-                                },
-                                modifier = Modifier.weight(1f).height(52.dp),
-                                shape = RoundedCornerShape(14.dp)
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Main action buttons
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                Text("不认识", fontSize = 16.sp)
+                                Button(
+                                    onClick = {
+                                        revealed = true
+                                        if (!answerRecorded) {
+                                            answerRecorded = true
+                                            viewModel.onWrongAnswer()
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f).height(52.dp),
+                                    shape = RoundedCornerShape(14.dp)
+                                ) {
+                                    Text("不认识", fontSize = 16.sp)
+                                }
+
+                                OutlinedButton(
+                                    onClick = {},
+                                    modifier = Modifier.weight(1f).height(52.dp),
+                                    interactionSource = interactionSource,
+                                    shape = RoundedCornerShape(14.dp),
+                                    enabled = !isProcessing
+                                ) {
+                                    Text(if (isRecording) "松开识别" else "说意思", fontSize = 16.sp)
+                                }
                             }
                         }
                     } else {
                         Button(
                             onClick = { viewModel.loadNextWord() },
-                            modifier = Modifier.fillMaxWidth().height(52.dp),
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(end = 12.dp, bottom = 8.dp)
+                                .width(160.dp)
+                                .height(52.dp),
                             shape = RoundedCornerShape(14.dp)
                         ) {
                             Text("下一个", fontSize = 16.sp)
@@ -555,9 +798,39 @@ fun WordScreen(
                             )
                         }
                     }
-
-                    Spacer(modifier = Modifier.height(32.dp))
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EtymologyBreakdown(syllables: List<Syllable>, revealed: Boolean) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        syllables.forEachIndexed { index, syllable ->
+            val color = syllableColors[index % syllableColors.size]
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                if (revealed) {
+                    Text(
+                        text = syllable.phonetic,
+                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
+                        color = color.copy(alpha = 0.8f),
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+                Text(
+                    text = syllable.text,
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 32.sp
+                    ),
+                    color = color,
+                    textAlign = TextAlign.Center
+                )
             }
         }
     }
@@ -575,7 +848,6 @@ private fun CelebrationBanner(visible: Boolean, onFinished: () -> Unit) {
         animationSpec = tween(500)
     )
 
-    // Auto-dismiss after celebration
     if (visible) {
         LaunchedEffect(Unit) {
             kotlinx.coroutines.delay(2500)
@@ -588,7 +860,6 @@ private fun CelebrationBanner(visible: Boolean, onFinished: () -> Unit) {
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            // Confetti particles
             Box(modifier = Modifier.fillMaxWidth().height(48.dp)) {
                 starColors.forEachIndexed { i, color ->
                     val xOffset = ((i.toFloat() - 2.5f) * 60).dp
@@ -608,7 +879,6 @@ private fun CelebrationBanner(visible: Boolean, onFinished: () -> Unit) {
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Checkmark icon
             Icon(
                 imageVector = Icons.Rounded.Check,
                 contentDescription = null,
@@ -618,7 +888,6 @@ private fun CelebrationBanner(visible: Boolean, onFinished: () -> Unit) {
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // "说对了!" text
             Text(
                 text = "说对了!",
                 style = MaterialTheme.typography.headlineSmall.copy(
@@ -642,7 +911,6 @@ private fun RetryBanner(visible: Boolean, onFinished: () -> Unit) {
 
     if (visible) {
         LaunchedEffect(Unit) {
-            // Shake: left → right → left → right → center
             shakeOffset.animateTo(-12f, spring(dampingRatio = 0.3f, stiffness = 800f))
             shakeOffset.animateTo(12f, spring(dampingRatio = 0.3f, stiffness = 800f))
             shakeOffset.animateTo(-8f, spring(dampingRatio = 0.3f, stiffness = 800f))
@@ -736,7 +1004,6 @@ private suspend fun playPcm(pcmData: ByteArray?) = withContext(Dispatchers.IO) {
         track.write(data, 0, data.size)
         track.play()
 
-        // Wait for playback to finish, polling for cancellation
         val durationMs = (data.size * 1000L) / (sampleRate * 2)
         val start = System.currentTimeMillis()
         while (isActive && System.currentTimeMillis() - start < durationMs + 200) {
@@ -748,37 +1015,28 @@ private suspend fun playPcm(pcmData: ByteArray?) = withContext(Dispatchers.IO) {
     }
 }
 
-@Composable
-private fun SyllableWord(syllables: List<Syllable>, revealed: Boolean) {
-    if (syllables.isEmpty()) return
-
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.Top
-    ) {
-        syllables.forEachIndexed { index, syllable ->
-            val color = syllableColors[index % syllableColors.size]
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                if (revealed) {
-                    Text(
-                        text = syllable.phonetic,
-                        style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp),
-                        color = color.copy(alpha = 0.8f),
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                }
-                Text(
-                    text = syllable.text,
-                    style = MaterialTheme.typography.displayMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 40.sp
-                    ),
-                    color = color,
-                    textAlign = TextAlign.Center
-                )
-            }
+/** Play audio from a URL via MediaPlayer. Returns true if playback started successfully. */
+private suspend fun playPronunciation(url: String): Boolean = withContext(Dispatchers.IO) {
+    try {
+        val mp = MediaPlayer()
+        mp.setAudioAttributes(
+            AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                .build()
+        )
+        mp.setDataSource(url)
+        mp.setOnCompletionListener { mp -> mp.release() }
+        mp.setOnErrorListener { mp, _, _ -> mp.release(); true }
+        mp.prepare()
+        mp.start()
+        // Wait for playback to complete or be cancelled
+        while (isActive && mp.isPlaying) {
+            delay(200)
         }
+        true
+    } catch (e: Exception) {
+        false
     }
 }
 
@@ -807,8 +1065,35 @@ fun WordScreenPreview() {
                     .padding(horizontal = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Spacer(modifier = Modifier.weight(0.2f))
-                SyllableWord(
+                // Category badge
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.padding(top = 16.dp)
+                ) {
+                    Text(
+                        text = "CET-4",
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+
+                Spacer(modifier = Modifier.weight(0.15f))
+
+                Text(
+                    text = "expensive",
+                    style = MaterialTheme.typography.displaySmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 36.sp
+                    ),
+                    color = MaterialTheme.colorScheme.onBackground,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                EtymologyBreakdown(
                     listOf(
                         Syllable("ex", "/ɪk/"),
                         Syllable("pen", "/ˈspen/"),
@@ -818,15 +1103,15 @@ fun WordScreenPreview() {
                 )
 
                 if (revealed) {
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         text = "/ɪkˈspensɪv/",
                         style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(modifier = Modifier.height(20.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = "adj.  昂贵的",
+                        text = "昂贵的",
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.Medium,
                             fontSize = 22.sp
