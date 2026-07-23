@@ -41,6 +41,7 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.VolumeUp
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -146,6 +147,18 @@ fun WordScreen(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scope = rememberCoroutineScope()
     var playJob by remember { mutableStateOf<Job?>(null) }
+    var studySeconds by remember { mutableStateOf(0) }
+    var showRestReminder by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        while (isActive) {
+            delay(1000)
+            studySeconds++
+            if (studySeconds == 15 * 60) {
+                showRestReminder = true
+            }
+        }
+    }
 
     val currentWord = (quizState as? QuizState.Active)?.word
     LaunchedEffect(currentWord) {
@@ -246,6 +259,17 @@ fun WordScreen(
                     }
                 },
                 actions = {
+                    val minutes = studySeconds / 60
+                    val seconds = studySeconds % 60
+                    Text(
+                        text = "${minutes}:${seconds.toString().padStart(2, '0')}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (studySeconds >= 15 * 60)
+                            Color(0xFFE53935)
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(end = 4.dp)
+                    )
                     IconButton(onClick = { viewModel.resetProgress() }) {
                         Icon(
                             Icons.Rounded.Refresh,
@@ -803,6 +827,24 @@ fun WordScreen(
                 }
             }
         }
+    }
+
+    if (showRestReminder) {
+        AlertDialog(
+            onDismissRequest = { showRestReminder = false },
+            title = { Text("休息一下") },
+            text = { Text("你已经连续学习15分钟了，起来活动一下，看看远处，让眼睛休息一下吧。") },
+            confirmButton = {
+                TextButton(onClick = { showRestReminder = false }) {
+                    Text("继续学习")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onBack) {
+                    Text("返回首页")
+                }
+            }
+        )
     }
 }
 
