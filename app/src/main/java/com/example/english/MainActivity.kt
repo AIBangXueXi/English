@@ -8,6 +8,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -15,6 +19,8 @@ import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.english.data.WordViewModel
+import com.example.english.data.update.UpdateInfo
+import com.example.english.data.update.UpdateManager
 import com.example.english.speech.SpeechService
 import com.example.english.ui.screen.HomeScreen
 import com.example.english.ui.screen.WordScreen
@@ -22,6 +28,7 @@ import com.example.english.ui.theme.EnglishTheme
 
 class MainActivity : ComponentActivity() {
     private lateinit var speechService: SpeechService
+    private lateinit var updateManager: UpdateManager
 
     private val requestPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -33,11 +40,46 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         speechService = SpeechService(this)
+        updateManager = UpdateManager(this)
         enableEdgeToEdge()
 
         setContent {
             EnglishTheme {
                 var currentScreen by remember { mutableStateOf<Screen>(Screen.Home) }
+                var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
+
+                LaunchedEffect(Unit) {
+                    updateManager.checkUpdate()?.let { info ->
+                        if (info.hasUpdate) {
+                            updateInfo = info
+                        }
+                    }
+                }
+
+                if (updateInfo != null) {
+                    AlertDialog(
+                        onDismissRequest = { updateInfo = null },
+                        title = { Text("发现新版本") },
+                        text = { Text("最新版本：${updateInfo!!.latestVersion}\n是否立即更新？") },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                val info = updateInfo!!
+                                updateInfo = null
+                                updateManager.downloadAndInstall(
+                                    info.downloadUrl,
+                                    "english_v${info.latestVersion}.apk"
+                                )
+                            }) {
+                                Text("立即更新")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { updateInfo = null }) {
+                                Text("稍后再说")
+                            }
+                        }
+                    )
+                }
 
                 when (val screen = currentScreen) {
                     is Screen.Home -> HomeScreen(

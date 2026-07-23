@@ -9,4 +9,7 @@ interface WordApiService {
         @Query("seq") seq: Int = 1,
         @Query("num") num: Int = 20
     ): ApiResponse
+
+    @GET("bxx_en_android/version")
+    suspend fun getVersion(): VersionResponse
 }

@@ -25,3 +25,9 @@ data class ApiResponse(
     val data: List<ApiWord>,
     val message: String
 )
+
+data class VersionResponse(
+    val code: Int,
+    val data: String,
+    val message: String
+)
