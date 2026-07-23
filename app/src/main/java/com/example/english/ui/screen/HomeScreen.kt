@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.english.BuildConfig
 import com.example.english.ui.theme.EnglishTheme
 
 @Composable
@@ -179,6 +180,16 @@ fun HomeScreen(
                 ModuleRow(
                     module1 = ModuleItem("读短文", "阅读英文原版短篇", Icons.AutoMirrored.Rounded.MenuBook, onReadClick),
                     module2 = ModuleItem("本地词库", "管理你的专属词汇", Icons.Rounded.Bookmarks, onDictionaryClick),
+                )
+
+                Spacer(modifier = Modifier.weight(1f))
+                Text(
+                    text = "v${BuildConfig.VERSION_NAME}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(bottom = 12.dp)
                 )
             }
         }
