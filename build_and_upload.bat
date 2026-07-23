@@ -9,7 +9,10 @@ echo.
 REM 1. Extract versionName from app/build.gradle.kts
 echo [1/4] Reading version from app\build.gradle.kts ...
 
-for /f "usebackq tokens=*" %%i in (`powershell -NoProfile -Command "(Select-String -Path 'app\build.gradle.kts' -Pattern 'versionName\s*=\s*""([^""]+)""').Matches.Groups[1].Value"`) do set VERSION=%%i
+set TEMP_FILE=%TEMP%\ver_%RANDOM%.txt
+powershell -NoProfile -Command "(Select-String -Path 'app\build.gradle.kts' -Pattern 'versionName\s*=\s*\x22([^\x22]+)\x22').Matches.Groups[1].Value | Out-File -FilePath '%TEMP_FILE%' -Encoding ASCII -NoNewline"
+set /p VERSION=<"%TEMP_FILE%"
+del "%TEMP_FILE%"
 
 if "%VERSION%"=="" (
     echo ERROR: Could not extract versionName from app\build.gradle.kts
