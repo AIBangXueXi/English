@@ -115,7 +115,7 @@ class WordViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val unknown = currentUnknownWord
                 if (unknown != null) {
-                    // stays in unknown, move to next
+                    repository.onUnknownWordWrong(unknown)
                 } else {
                     val apiWord = pendingApiWords.getOrNull(currentApiIndex) ?: return@launch
                     repository.addToUnknown(apiWord)

@@ -20,5 +20,6 @@ data class UnknownWord(
     val pastTense: String = "",
     val categoryName: String = "",
     val remark: String = "",
-    val correctCount: Int = 0
+    val stage: Int = 0,
+    val nextReviewTime: Long = 0
 )

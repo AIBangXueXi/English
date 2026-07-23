@@ -10,7 +10,7 @@ import com.example.english.data.dao.UnknownWordDao
 import com.example.english.data.entity.KnownWord
 import com.example.english.data.entity.UnknownWord
 
-@Database(entities = [KnownWord::class, UnknownWord::class], version = 2, exportSchema = false)
+@Database(entities = [KnownWord::class, UnknownWord::class], version = 3, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun knownWordDao(): KnownWordDao

@@ -39,7 +39,7 @@ class WordRepository(context: Context) {
     }
 
     suspend fun getNextUnknownWord(): UnknownWord? = withContext(Dispatchers.IO) {
-        unknownDao.getFirst()
+        unknownDao.getFirstDue(System.currentTimeMillis())
     }
 
     suspend fun fetchNewWords(): List<ApiWord> = withContext(Dispatchers.IO) {
@@ -61,16 +61,31 @@ class WordRepository(context: Context) {
         updateStoredSeq(1)
     }
 
+    // Ebbinghaus intervals in millis: 15min, 1h, 1d, 2d, 4d, 7d
+    private val ebbinghausIntervals = longArrayOf(
+        15 * 60 * 1000L,
+        60 * 60 * 1000L,
+        24 * 60 * 60 * 1000L,
+        2 * 24 * 60 * 60 * 1000L,
+        4 * 24 * 60 * 60 * 1000L,
+        7 * 24 * 60 * 60 * 1000L
+    )
+
     suspend fun onUnknownWordCorrect(word: UnknownWord): Boolean = withContext(Dispatchers.IO) {
-        val newCount = word.correctCount + 1
-        if (newCount >= 5) {
+        val nextStage = word.stage + 1
+        if (nextStage >= ebbinghausIntervals.size) {
             knownDao.insert(word.toKnownWord())
             unknownDao.deleteById(word.id)
             true
         } else {
-            unknownDao.incrementCorrectCount(word.id)
+            val nextTime = System.currentTimeMillis() + ebbinghausIntervals[nextStage]
+            unknownDao.updateStage(word.id, nextStage, nextTime)
             false
         }
+    }
+
+    suspend fun onUnknownWordWrong(word: UnknownWord) = withContext(Dispatchers.IO) {
+        unknownDao.updateStage(word.id, 0, 0)
     }
 
     suspend fun addToKnown(apiWord: ApiWord) = withContext(Dispatchers.IO) {
@@ -121,8 +136,7 @@ class WordRepository(context: Context) {
         presentParticiple = presentParticiple,
         pastTense = pastTense,
         categoryName = categoryName,
-        remark = remark,
-        correctCount = 0
+        remark = remark
     )
 
     private fun UnknownWord.toKnownWord() = KnownWord(
