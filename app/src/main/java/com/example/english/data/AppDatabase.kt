@@ -26,7 +26,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "english_words.db"
-                ).fallbackToDestructiveMigration(true).build().also { INSTANCE = it }
+                ).build().also { INSTANCE = it }
             }
         }
     }
