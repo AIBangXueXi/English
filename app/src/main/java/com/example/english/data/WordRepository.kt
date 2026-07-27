@@ -38,8 +38,8 @@ class WordRepository(context: Context) {
             .create(WordApiService::class.java)
     }
 
-    suspend fun getNextUnknownWord(): UnknownWord? = withContext(Dispatchers.IO) {
-        unknownDao.getFirstDue(System.currentTimeMillis())
+    suspend fun getNextUnknownWord(excludeId: Long = -1L): UnknownWord? = withContext(Dispatchers.IO) {
+        unknownDao.getFirstDue(System.currentTimeMillis(), excludeId)
     }
 
     suspend fun fetchNewWords(): List<ApiWord> = withContext(Dispatchers.IO) {

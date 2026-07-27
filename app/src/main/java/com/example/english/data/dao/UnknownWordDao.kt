@@ -14,8 +14,8 @@ interface UnknownWordDao {
     @Query("SELECT * FROM unknown_words WHERE nextReviewTime <= :now ORDER BY nextReviewTime ASC, id ASC")
     suspend fun getDueForReview(now: Long): List<UnknownWord>
 
-    @Query("SELECT * FROM unknown_words WHERE nextReviewTime <= :now ORDER BY nextReviewTime ASC, id ASC LIMIT 1")
-    suspend fun getFirstDue(now: Long): UnknownWord?
+    @Query("SELECT * FROM unknown_words WHERE nextReviewTime <= :now AND id != :excludeId ORDER BY nextReviewTime ASC, id ASC LIMIT 1")
+    suspend fun getFirstDue(now: Long, excludeId: Long): UnknownWord?
 
     @Query("SELECT COUNT(*) FROM unknown_words")
     suspend fun count(): Int

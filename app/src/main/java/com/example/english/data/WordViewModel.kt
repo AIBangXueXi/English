@@ -48,7 +48,7 @@ class WordViewModel(application: Application) : AndroidViewModel(application) {
                 unknownCount = repository.getUnknownCount()
                 knownCount = repository.getKnownCount()
 
-                val unknown = repository.getNextUnknownWord()
+                val unknown = repository.getNextUnknownWord(currentUnknownWord?.id ?: -1L)
                 if (unknown != null) {
                     currentUnknownWord = unknown
                     _state.value = QuizState.Active(
