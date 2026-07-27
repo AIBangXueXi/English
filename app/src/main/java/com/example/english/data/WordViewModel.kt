@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.english.data.api.ApiWord
+import com.example.english.data.entity.KnownWord
 import com.example.english.data.entity.UnknownWord
 import com.example.english.ui.screen.Word
 import com.google.gson.Gson
@@ -30,6 +31,12 @@ class WordViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _state = MutableStateFlow<QuizState>(QuizState.Loading)
     val state: StateFlow<QuizState> = _state
+
+    private val _libraryKnownWords = MutableStateFlow<List<KnownWord>>(emptyList())
+    val libraryKnownWords: StateFlow<List<KnownWord>> = _libraryKnownWords
+
+    private val _libraryUnknownWords = MutableStateFlow<List<UnknownWord>>(emptyList())
+    val libraryUnknownWords: StateFlow<List<UnknownWord>> = _libraryUnknownWords
 
     private var pendingApiWords: List<ApiWord> = emptyList()
     private var currentApiIndex: Int = 0
@@ -135,6 +142,28 @@ class WordViewModel(application: Application) : AndroidViewModel(application) {
             currentApiIndex = 0
             currentUnknownWord = null
             loadNextWord()
+        }
+    }
+
+    /** Load the full contents of both local library tables. */
+    fun refreshLibrary() {
+        viewModelScope.launch {
+            _libraryKnownWords.value = repository.getKnownWords()
+            _libraryUnknownWords.value = repository.getUnknownWords()
+        }
+    }
+
+    fun deleteKnownWord(id: Long) {
+        viewModelScope.launch {
+            repository.deleteKnownWord(id)
+            refreshLibrary()
+        }
+    }
+
+    fun deleteUnknownWord(id: Long) {
+        viewModelScope.launch {
+            repository.deleteUnknownWord(id)
+            refreshLibrary()
         }
     }
 

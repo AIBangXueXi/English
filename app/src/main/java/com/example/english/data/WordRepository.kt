@@ -121,6 +121,11 @@ class WordRepository(context: Context) {
     suspend fun getUnknownCount(): Int = withContext(Dispatchers.IO) { unknownDao.count() }
     suspend fun getKnownCount(): Int = withContext(Dispatchers.IO) { knownDao.count() }
 
+    suspend fun getKnownWords(): List<KnownWord> = withContext(Dispatchers.IO) { knownDao.getAll() }
+    suspend fun getUnknownWords(): List<UnknownWord> = withContext(Dispatchers.IO) { unknownDao.getAll() }
+    suspend fun deleteKnownWord(id: Long) = withContext(Dispatchers.IO) { knownDao.deleteById(id) }
+    suspend fun deleteUnknownWord(id: Long) = withContext(Dispatchers.IO) { unknownDao.deleteById(id) }
+
     private fun ApiWord.toKnownWord() = KnownWord(
         wordId = id,
         word = word,

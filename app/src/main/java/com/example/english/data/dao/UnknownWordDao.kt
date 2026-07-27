@@ -23,6 +23,9 @@ interface UnknownWordDao {
     @Query("UPDATE unknown_words SET stage = :stage, nextReviewTime = :nextReviewTime WHERE id = :id")
     suspend fun updateStage(id: Long, stage: Int, nextReviewTime: Long)
 
+    @Query("SELECT * FROM unknown_words ORDER BY id DESC")
+    suspend fun getAll(): List<UnknownWord>
+
     @Query("DELETE FROM unknown_words WHERE id = :id")
     suspend fun deleteById(id: Long)
 }

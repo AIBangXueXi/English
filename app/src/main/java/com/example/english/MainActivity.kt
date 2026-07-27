@@ -23,6 +23,7 @@ import com.example.english.data.update.UpdateInfo
 import com.example.english.data.update.UpdateManager
 import com.example.english.speech.SpeechService
 import com.example.english.ui.screen.HomeScreen
+import com.example.english.ui.screen.LibraryManagementScreen
 import com.example.english.ui.screen.WordScreen
 import com.example.english.ui.theme.EnglishTheme
 
@@ -87,6 +88,9 @@ class MainActivity : ComponentActivity() {
                             ensureAudioPermission {
                                 currentScreen = Screen.WordPage
                             }
+                        },
+                        onDictionaryClick = {
+                            currentScreen = Screen.LibraryManagement
                         }
                     )
                     is Screen.WordPage -> {
@@ -94,6 +98,13 @@ class MainActivity : ComponentActivity() {
                         WordScreen(
                             viewModel = wordViewModel,
                             speechService = speechService,
+                            onBack = { currentScreen = Screen.Home }
+                        )
+                    }
+                    is Screen.LibraryManagement -> {
+                        val libraryViewModel: WordViewModel = viewModel()
+                        LibraryManagementScreen(
+                            viewModel = libraryViewModel,
                             onBack = { currentScreen = Screen.Home }
                         )
                     }
@@ -116,4 +127,5 @@ class MainActivity : ComponentActivity() {
 sealed class Screen {
     data object Home : Screen()
     data object WordPage : Screen()
+    data object LibraryManagement : Screen()
 }
