@@ -77,6 +77,7 @@ import com.example.english.data.QuizState
 import com.example.english.data.WordViewModel
 import com.example.english.data.api.DeepSeekService
 import com.example.english.speech.SpeechService
+import com.example.english.data.resolveStaticUrl
 import com.example.english.ui.theme.EnglishTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -270,12 +271,6 @@ fun WordScreen(
                             MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                         modifier = Modifier.padding(end = 4.dp)
                     )
-                    IconButton(onClick = { viewModel.resetProgress() }) {
-                        Icon(
-                            Icons.Rounded.Refresh,
-                            contentDescription = "重置进度"
-                        )
-                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
@@ -403,7 +398,7 @@ fun WordScreen(
                         // Etymology breakdown
                         if (word.syllables.isNotEmpty()) {
                             Spacer(modifier = Modifier.height(24.dp))
-                            EtymologyBreakdown(word.syllables, revealed)
+                            EtymologyBreakdown(word.syllables, word.etymologyPronunciation, revealed)
                         }
 
                         if (revealed) {
@@ -849,21 +844,104 @@ fun WordScreen(
 }
 
 @Composable
-private fun EtymologyBreakdown(syllables: List<Syllable>, revealed: Boolean) {
+private fun EtymologyBreakdown(
+    syllables: List<Syllable>,
+    etymologyPronunciation: List<String>,
+    revealed: Boolean
+) {
+    val scope = rememberCoroutineScope()
+    var playingIndex by remember { mutableStateOf<Int?>(null) }
+    var syllablePlayer by remember { mutableStateOf<MediaPlayer?>(null) }
+    var syllableJob by remember { mutableStateOf<Job?>(null) }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            syllableJob?.cancel()
+            syllablePlayer?.apply { try { stop() } catch (_: Exception) {}; release() }
+            syllablePlayer = null
+        }
+    }
+
     Row(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         syllables.forEachIndexed { index, syllable ->
             val color = syllableColors[index % syllableColors.size]
+            val pronUrl = etymologyPronunciation.getOrNull(index)
+                ?.takeIf { it.isNotEmpty() }
+                ?.let { resolveStaticUrl(it) } ?: ""
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 if (revealed) {
-                    Text(
-                        text = syllable.phonetic,
-                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
-                        color = color.copy(alpha = 0.8f),
-                        textAlign = TextAlign.Center
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Text(
+                            text = syllable.phonetic,
+                            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
+                            color = color.copy(alpha = 0.8f),
+                            textAlign = TextAlign.Center
+                        )
+                        if (pronUrl.isNotEmpty()) {
+                            IconButton(
+                                onClick = {
+                                    if (playingIndex == index) {
+                                        syllableJob?.cancel()
+                                        syllablePlayer?.apply { try { stop() } catch (_: Exception) {}; release() }
+                                        syllablePlayer = null
+                                        playingIndex = null
+                                    } else {
+                                        syllableJob?.cancel()
+                                        syllablePlayer?.apply { try { stop() } catch (_: Exception) {}; release() }
+                                        syllablePlayer = null
+                                        playingIndex = index
+                                        syllableJob = scope.launch(Dispatchers.IO) {
+                                            try {
+                                                val mp = MediaPlayer().apply {
+                                                    setAudioAttributes(
+                                                        AudioAttributes.Builder()
+                                                            .setUsage(AudioAttributes.USAGE_MEDIA)
+                                                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                                                            .build()
+                                                    )
+                                                    setDataSource(pronUrl)
+                                                    setOnCompletionListener { m ->
+                                                        m.release()
+                                                        playingIndex = null
+                                                        syllablePlayer = null
+                                                    }
+                                                    setOnErrorListener { m, _, _ ->
+                                                        m.release()
+                                                        playingIndex = null
+                                                        syllablePlayer = null
+                                                        true
+                                                    }
+                                                    prepare()
+                                                    start()
+                                                }
+                                                syllablePlayer = mp
+                                                while (isActive && mp.isPlaying) {
+                                                    delay(200)
+                                                }
+                                            } catch (_: Exception) {
+                                                syllablePlayer = null
+                                                playingIndex = null
+                                            }
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (playingIndex == index) Icons.Rounded.Stop else Icons.Rounded.VolumeUp,
+                                    contentDescription = if (playingIndex == index) "停止" else "发音",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = color
+                                )
+                            }
+                        }
+                    }
                     Spacer(modifier = Modifier.height(4.dp))
                 }
                 Text(
@@ -1143,6 +1221,7 @@ fun WordScreenPreview() {
                         Syllable("pen", "/ˈspen/"),
                         Syllable("sive", "/sɪv/")
                     ),
+                    emptyList(),
                     revealed
                 )
 

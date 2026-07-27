@@ -14,6 +14,22 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
+/** Base URL for static assets (word pronunciation audio, etc.). */
+const val STATIC_BASE_URL = "https://static.aibangxuexi.com"
+
+/**
+ * Resolve a pronunciation/audio path returned by the API into a full URL.
+ * The API stores these as relative paths, so we prefix the static CDN host.
+ * Already-absolute URLs (http/https) are returned unchanged.
+ */
+fun resolveStaticUrl(raw: String): String {
+    if (raw.isEmpty()) return raw
+    if (raw.startsWith("http://", ignoreCase = true) ||
+        raw.startsWith("https://", ignoreCase = true)
+    ) return raw
+    return STATIC_BASE_URL + if (raw.startsWith("/")) raw else "/$raw"
+}
+
 class WordRepository(context: Context) {
     private val db = AppDatabase.getInstance(context)
     private val knownDao = db.knownWordDao()
