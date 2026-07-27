@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Environment
 import androidx.core.content.FileProvider
+import kotlin.system.exitProcess
 import com.example.english.BuildConfig
 import com.example.english.data.api.WordApiService
 import kotlinx.coroutines.Dispatchers
@@ -24,6 +25,7 @@ data class UpdateInfo(
 )
 
 class UpdateManager(private val context: Context) {
+    private val appContext = context.applicationContext
 
     private val api: WordApiService by lazy {
         val logging = HttpLoggingInterceptor().apply {
@@ -64,8 +66,8 @@ class UpdateManager(private val context: Context) {
     }
 
     fun downloadAndInstall(url: String, filename: String) {
-        val dir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
-            ?: context.getFilesDir()
+        val dir = appContext.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+            ?: appContext.getFilesDir()
         val file = File(dir, filename)
 
         val client = OkHttpClient.Builder()
@@ -86,6 +88,10 @@ class UpdateManager(private val context: Context) {
                 }
 
                 installApk(file)
+                // Give the system a moment to bring up the installer, then exit
+                // this app so the package can be replaced cleanly.
+                try { Thread.sleep(500) } catch (_: Exception) { }
+                exitProcess(0)
             } catch (_: Exception) {
             }
         }.start()
@@ -93,8 +99,8 @@ class UpdateManager(private val context: Context) {
 
     private fun installApk(file: File) {
         val uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
+            appContext,
+            "${appContext.packageName}.fileprovider",
             file
         )
         val intent = Intent(Intent.ACTION_VIEW).apply {
@@ -102,7 +108,7 @@ class UpdateManager(private val context: Context) {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        context.startActivity(intent)
+        appContext.startActivity(intent)
     }
 
     private fun extractVersion(filename: String): String {

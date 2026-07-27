@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,6 +17,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -66,6 +69,8 @@ fun LibraryManagementScreen(
     val knownWords by viewModel.libraryKnownWords.collectAsStateWithLifecycle()
     val unknownWords by viewModel.libraryUnknownWords.collectAsStateWithLifecycle()
     var pendingDelete by remember { mutableStateOf<PendingDelete?>(null) }
+    var knownExpanded by remember { mutableStateOf(false) }
+    var unknownExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.refreshLibrary()
@@ -116,42 +121,56 @@ fun LibraryManagementScreen(
             }
 
             item {
-                SectionHeader("已掌握单词", knownWords.size)
+                SectionHeader(
+                    title = "已掌握单词",
+                    count = knownWords.size,
+                    expanded = knownExpanded,
+                    onToggle = { knownExpanded = !knownExpanded }
+                )
             }
-            if (knownWords.isEmpty()) {
-                item { EmptyHint("暂无已掌握单词") }
-            } else {
-                items(knownWords, key = { it.id }) { word ->
-                    WordRow(
-                        word = word.word,
-                        phonetic = word.phonetic,
-                        meaning = word.meaning,
-                        onDelete = {
-                            pendingDelete = PendingDelete(
-                                LibraryTable.KNOWN, word.id, word.word
-                            )
-                        }
-                    )
+            if (knownExpanded) {
+                if (knownWords.isEmpty()) {
+                    item { EmptyHint("暂无已掌握单词") }
+                } else {
+                    items(knownWords, key = { it.id }) { word ->
+                        WordRow(
+                            word = word.word,
+                            phonetic = word.phonetic,
+                            meaning = word.meaning,
+                            onDelete = {
+                                pendingDelete = PendingDelete(
+                                    LibraryTable.KNOWN, word.id, word.word
+                                )
+                            }
+                        )
+                    }
                 }
             }
 
             item {
-                SectionHeader("待复习单词", unknownWords.size)
+                SectionHeader(
+                    title = "待复习单词",
+                    count = unknownWords.size,
+                    expanded = unknownExpanded,
+                    onToggle = { unknownExpanded = !unknownExpanded }
+                )
             }
-            if (unknownWords.isEmpty()) {
-                item { EmptyHint("暂无待复习单词") }
-            } else {
-                items(unknownWords, key = { it.id }) { word ->
-                    WordRow(
-                        word = word.word,
-                        phonetic = word.phonetic,
-                        meaning = word.meaning,
-                        onDelete = {
-                            pendingDelete = PendingDelete(
-                                LibraryTable.UNKNOWN, word.id, word.word
-                            )
-                        }
-                    )
+            if (unknownExpanded) {
+                if (unknownWords.isEmpty()) {
+                    item { EmptyHint("暂无待复习单词") }
+                } else {
+                    items(unknownWords, key = { it.id }) { word ->
+                        WordRow(
+                            word = word.word,
+                            phonetic = word.phonetic,
+                            meaning = word.meaning,
+                            onDelete = {
+                                pendingDelete = PendingDelete(
+                                    LibraryTable.UNKNOWN, word.id, word.word
+                                )
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -186,12 +205,31 @@ fun LibraryManagementScreen(
 }
 
 @Composable
-private fun SectionHeader(title: String, count: Int) {
-    Text(
-        text = "$title ($count)",
-        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-        color = MaterialTheme.colorScheme.onBackground
-    )
+private fun SectionHeader(
+    title: String,
+    count: Int,
+    expanded: Boolean,
+    onToggle: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onToggle)
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "$title ($count)",
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onBackground
+        )
+        Spacer(modifier = Modifier.weight(1f))
+        Icon(
+            imageVector = if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+            contentDescription = if (expanded) "收起" else "展开",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 }
 
 @Composable

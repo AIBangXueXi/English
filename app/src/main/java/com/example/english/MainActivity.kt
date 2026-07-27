@@ -70,6 +70,7 @@ class MainActivity : ComponentActivity() {
                                     info.downloadUrl,
                                     "english_v${info.latestVersion}.apk"
                                 )
+                                finish()
                             }) {
                                 Text("立即更新")
                             }
