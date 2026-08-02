@@ -93,11 +93,9 @@ class UpdateManager(private val context: Context) {
                 }
 
                 installApk(file)
-                // Let the system bring up the installer before we step aside.
-                // Then gracefully finish OUR task on the main thread. The
-                // installer is a separate NEW_TASK and stays alive to take over
-                // — unlike exitProcess(0), which would abort the launch.
-                try { Thread.sleep(1500) } catch (_: Exception) { }
+                // The system installer (a separate task) takes over from here.
+                // We intentionally do NOT finish our own task, so the app
+                // simply hands off to the installer without exiting.
                 Handler(Looper.getMainLooper()).post { onInstalled() }
             } catch (e: Exception) {
                 Log.e("UpdateManager", "update failed", e)
