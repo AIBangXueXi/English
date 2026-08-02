@@ -5,6 +5,7 @@ import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
 import android.media.MediaPlayer
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
@@ -44,6 +45,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.platform.LocalContext
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -365,6 +367,7 @@ fun WordScreen(
             is QuizState.Active -> {
                 val active = quizState as QuizState.Active
                 val word = active.word
+                val context = LocalContext.current
 
                 Box(
                     modifier = Modifier
@@ -457,9 +460,17 @@ fun WordScreen(
                                     style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                                if (word.pronunciation.isNotEmpty() && !isDictation) {
+                                if (!isDictation) {
                                     IconButton(
                                         onClick = {
+                                            if (word.pronunciation.isBlank()) {
+                                                Toast.makeText(
+                                                    context,
+                                                    "该词暂无发音音频",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                                return@IconButton
+                                            }
                                             if (isPlayingPronunciation) {
                                                 pronunciationJob?.cancel()
                                                 pronunciationPlayer?.apply {
