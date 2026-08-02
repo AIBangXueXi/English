@@ -203,6 +203,18 @@ fun WordScreen(
         pronunciationPlayer = null
     }
 
+    // 默写完成自动确认：拼写完全正确即自动标记通过（无需点“确认”）
+    LaunchedEffect(spellingInput, isDictation) {
+        if (isDictation && spellingInput.isNotBlank()) {
+            val target = currentWord?.word ?: return@LaunchedEffect
+            if (spellingInput.trim().equals(target, ignoreCase = true)) {
+                spellingPassed = true
+                showCelebration = true
+                spellingResult = null
+            }
+        }
+    }
+
     DisposableEffect(Unit) {
         onDispose {
             playJob?.cancel()

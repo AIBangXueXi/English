@@ -69,8 +69,9 @@ class MainActivity : ComponentActivity() {
                                 updateManager.downloadAndInstall(
                                     info.downloadUrl,
                                     "english_v${info.latestVersion}.apk"
-                                )
-                                finish()
+                                ) {
+                                    this@MainActivity.finishAndRemoveTask()
+                                }
                             }) {
                                 Text("立即更新")
                             }

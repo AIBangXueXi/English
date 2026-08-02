@@ -3,8 +3,10 @@ package com.example.english.data.update
 import android.content.Context
 import android.content.Intent
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
 import androidx.core.content.FileProvider
-import kotlin.system.exitProcess
 import com.example.english.BuildConfig
 import com.example.english.data.api.WordApiService
 import kotlinx.coroutines.Dispatchers
@@ -65,7 +67,7 @@ class UpdateManager(private val context: Context) {
         }
     }
 
-    fun downloadAndInstall(url: String, filename: String) {
+    fun downloadAndInstall(url: String, filename: String, onInstalled: () -> Unit = {}) {
         val dir = appContext.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
             ?: appContext.getFilesDir()
         val file = File(dir, filename)
@@ -79,7 +81,10 @@ class UpdateManager(private val context: Context) {
             try {
                 val request = Request.Builder().url(url).build()
                 val response = client.newCall(request).execute()
-                if (!response.isSuccessful) return@Thread
+                if (!response.isSuccessful) {
+                    Log.e("UpdateManager", "download failed: ${response.code}")
+                    return@Thread
+                }
 
                 response.body?.byteStream()?.use { input ->
                     FileOutputStream(file).use { output ->
@@ -88,11 +93,14 @@ class UpdateManager(private val context: Context) {
                 }
 
                 installApk(file)
-                // Give the system a moment to bring up the installer, then exit
-                // this app so the package can be replaced cleanly.
-                try { Thread.sleep(500) } catch (_: Exception) { }
-                exitProcess(0)
-            } catch (_: Exception) {
+                // Let the system bring up the installer before we step aside.
+                // Then gracefully finish OUR task on the main thread. The
+                // installer is a separate NEW_TASK and stays alive to take over
+                // — unlike exitProcess(0), which would abort the launch.
+                try { Thread.sleep(1500) } catch (_: Exception) { }
+                Handler(Looper.getMainLooper()).post { onInstalled() }
+            } catch (e: Exception) {
+                Log.e("UpdateManager", "update failed", e)
             }
         }.start()
     }
