@@ -1,0 +1,21 @@
+/usr/bin/sed: read error on stdin: Broken pipe
+/usr/bin/xargs: echo: terminated by signal 13
+Reusing configuration cache.
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:processDebugNavigationResources
+> Task :app:generateDebugResources
+> Task :app:generateDebugBuildConfig
+> Task :app:packageDebugResources
+> Task :app:parseDebugLocalResources
+> Task :app:generateDebugRFile
+> Task :app:kspDebugKotlin
+
+> Task :app:compileDebugKotlin
+w: file:///D:/works/English/app/src/main/java/com/example/english/ui/screen/HomeScreen.kt:138:65 'val Icons.Rounded.TrendingUp: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Rounded.TrendingUp.
+w: file:///D:/works/English/app/src/main/java/com/example/english/ui/screen/WordScreen.kt:459:125 'val Icons.Rounded.VolumeUp: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Rounded.VolumeUp.
+w: file:///D:/works/English/app/src/main/java/com/example/english/ui/screen/WordScreen.kt:1038:116 'val Icons.Rounded.VolumeUp: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Rounded.VolumeUp.
+
+BUILD SUCCESSFUL in 42s
+8 actionable tasks: 8 executed
+Configuration cache entry reused.

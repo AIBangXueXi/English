@@ -33,6 +33,18 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
@@ -139,7 +151,11 @@ fun WordScreen(
     var showRetryHint by remember { mutableStateOf(false) }
     var manualInput by remember { mutableStateOf("") }
     var manualResult by remember { mutableStateOf<String?>(null) }
-    var answerRecorded by remember { mutableStateOf(false) }
+    var meaningPassed by remember { mutableStateOf(false) }
+    var spellingPassed by remember { mutableStateOf(false) }
+    var gaveUp by remember { mutableStateOf(false) }
+    var spellingInput by remember { mutableStateOf("") }
+    var spellingResult by remember { mutableStateOf<String?>(null) }
     var isAiChecking by remember { mutableStateOf(false) }
     var isPlayingPronunciation by remember { mutableStateOf(false) }
     var pronunciationJob by remember { mutableStateOf<Job?>(null) }
@@ -162,6 +178,7 @@ fun WordScreen(
     }
 
     val currentWord = (quizState as? QuizState.Active)?.word
+    val isDictation = meaningPassed && !spellingPassed && !gaveUp
     LaunchedEffect(currentWord) {
         revealed = false
         isRecording = false
@@ -175,7 +192,11 @@ fun WordScreen(
         showRetryHint = false
         manualInput = ""
         manualResult = null
-        answerRecorded = false
+        meaningPassed = false
+        spellingPassed = false
+        gaveUp = false
+        spellingInput = ""
+        spellingResult = null
         isPlayingPronunciation = false
         isAiChecking = false
         pronunciationPlayer?.release()
@@ -191,6 +212,7 @@ fun WordScreen(
     }
 
     LaunchedEffect(isPressed) {
+        if (meaningPassed || gaveUp) return@LaunchedEffect
         val word = currentWord ?: return@LaunchedEffect
         if (isPressed && !revealed) {
             hasActiveRecording = true
@@ -218,13 +240,8 @@ fun WordScreen(
                 result.onSuccess { text ->
                     recognizedText = text
                     if (word.meaning.trim().contains(text.trim())) {
-                        isCorrect = true
-                        showCelebration = true
+                        meaningPassed = true
                         revealed = true
-                        if (!answerRecorded) {
-                            answerRecorded = true
-                            viewModel.onCorrectAnswer()
-                        }
                     } else {
                         isAiChecking = true
                         val aiMatch = DeepSeekService.compareMeaning(
@@ -232,13 +249,8 @@ fun WordScreen(
                         )
                         isAiChecking = false
                         if (aiMatch) {
-                            isCorrect = true
-                            showCelebration = true
+                            meaningPassed = true
                             revealed = true
-                            if (!answerRecorded) {
-                                answerRecorded = true
-                                viewModel.onCorrectAnswer()
-                            }
                         } else {
                             showRetryHint = true
                         }
@@ -384,19 +396,38 @@ fun WordScreen(
 
                         Spacer(modifier = Modifier.height(40.dp))
 
-                        // The full word
-                        Text(
-                            text = word.word,
-                            style = MaterialTheme.typography.displaySmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 36.sp
-                            ),
-                            color = MaterialTheme.colorScheme.onBackground,
-                            textAlign = TextAlign.Center
-                        )
+                        // The full word (hidden during dictation so the user must recall the spelling)
+                        if (isDictation) {
+                            Text(
+                                text = "＿＿＿",
+                                style = MaterialTheme.typography.displaySmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 36.sp
+                                ),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "根据意思默写单词拼写",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                textAlign = TextAlign.Center
+                            )
+                        } else {
+                            Text(
+                                text = word.word,
+                                style = MaterialTheme.typography.displaySmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 36.sp
+                                ),
+                                color = MaterialTheme.colorScheme.onBackground,
+                                textAlign = TextAlign.Center
+                            )
+                        }
 
                         // Etymology breakdown
-                        if (word.syllables.isNotEmpty()) {
+                        if (word.syllables.isNotEmpty() && !isDictation) {
                             Spacer(modifier = Modifier.height(24.dp))
                             EtymologyBreakdown(word.syllables, word.etymologyPronunciation, revealed)
                         }
@@ -414,7 +445,7 @@ fun WordScreen(
                                     style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                                if (word.pronunciation.isNotEmpty()) {
+                                if (word.pronunciation.isNotEmpty() && !isDictation) {
                                     IconButton(
                                         onClick = {
                                             if (isPlayingPronunciation) {
@@ -534,6 +565,19 @@ fun WordScreen(
                         ) {
                             Text(
                                 text = manualResult ?: "",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+                        }
+
+                        AnimatedVisibility(
+                            visible = spellingResult != null,
+                            enter = fadeIn(),
+                            exit = fadeOut()
+                        ) {
+                            Text(
+                                text = spellingResult ?: "",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.error,
                                 modifier = Modifier.padding(top = 8.dp)
@@ -701,122 +745,248 @@ fun WordScreen(
                         Spacer(modifier = Modifier.height(140.dp))
                     }
 
-                    // Fixed buttons at bottom-right for thumb reach
-                    if (!revealed) {
-                        Column(
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(end = 12.dp, bottom = 8.dp)
-                                .width(280.dp),
-                            horizontalAlignment = Alignment.End
-                        ) {
-                            // Manual input
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    // Fixed bottom action area — staged: 说意思 → 默写 → 下一个
+                    when {
+                        !meaningPassed && !gaveUp -> {
+                            // Stage 1: 说意思
+                            Column(
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(end = 12.dp, bottom = 8.dp)
+                                    .width(280.dp),
+                                horizontalAlignment = Alignment.End
                             ) {
-                                OutlinedTextField(
-                                    value = manualInput,
-                                    onValueChange = { manualInput = it; manualResult = null },
-                                    modifier = Modifier.weight(1f).height(52.dp),
-                                    placeholder = { Text("手动输入单词意思", fontSize = 13.sp) },
-                                    singleLine = true,
-                                    textStyle = MaterialTheme.typography.bodyMedium
-                                )
-                                Button(
-                                    onClick = {
-                                        val input = manualInput.trim()
-                                        if (input.isNotEmpty()) {
-                                            if (word.meaning.trim().contains(input)) {
-                                                isCorrect = true
-                                                showCelebration = true
-                                                revealed = true
-                                                manualResult = null
-                                                if (!answerRecorded) {
-                                                    answerRecorded = true
-                                                    viewModel.onCorrectAnswer()
-                                                }
-                                            } else {
-                                                scope.launch {
-                                                    isAiChecking = true
-                                                    val aiMatch = DeepSeekService.compareMeaning(
-                                                        input, word.meaning.trim()
-                                                    )
-                                                    isAiChecking = false
-                                                    if (aiMatch) {
-                                                        isCorrect = true
-                                                        showCelebration = true
-                                                        revealed = true
-                                                        manualResult = null
-                                                        if (!answerRecorded) {
-                                                            answerRecorded = true
-                                                            viewModel.onCorrectAnswer()
+                                // Manual input
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    OutlinedTextField(
+                                        value = manualInput,
+                                        onValueChange = { manualInput = it; manualResult = null },
+                                        modifier = Modifier.weight(1f).height(52.dp),
+                                        placeholder = { Text("手动输入单词意思", fontSize = 13.sp) },
+                                        singleLine = true,
+                                        textStyle = MaterialTheme.typography.bodyMedium
+                                    )
+                                    Button(
+                                        onClick = {
+                                            val input = manualInput.trim()
+                                            if (input.isNotEmpty()) {
+                                                if (word.meaning.trim().contains(input)) {
+                                                    meaningPassed = true
+                                                    revealed = true
+                                                    manualResult = null
+                                                } else {
+                                                    scope.launch {
+                                                        isAiChecking = true
+                                                        val aiMatch = DeepSeekService.compareMeaning(
+                                                            input, word.meaning.trim()
+                                                        )
+                                                        isAiChecking = false
+                                                        if (aiMatch) {
+                                                            meaningPassed = true
+                                                            revealed = true
+                                                            manualResult = null
+                                                        } else {
+                                                            manualResult = "意思不正确，再试试"
                                                         }
-                                                    } else {
-                                                        manualResult = "不正确，再试试"
                                                     }
                                                 }
                                             }
-                                        }
-                                    },
-                                    shape = RoundedCornerShape(14.dp),
-                                    enabled = manualInput.isNotBlank(),
-                                    modifier = Modifier.height(52.dp)
-                                ) {
-                                    Text("确认", fontSize = 14.sp)
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            // Main action buttons
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Button(
-                                    onClick = {
-                                        revealed = true
-                                        if (!answerRecorded) {
-                                            answerRecorded = true
-                                            viewModel.onWrongAnswer()
-                                        }
-                                    },
-                                    modifier = Modifier.weight(1f).height(52.dp),
-                                    shape = RoundedCornerShape(14.dp)
-                                ) {
-                                    Text("不认识", fontSize = 16.sp)
+                                        },
+                                        shape = RoundedCornerShape(14.dp),
+                                        enabled = manualInput.isNotBlank(),
+                                        modifier = Modifier.height(52.dp)
+                                    ) {
+                                        Text("确认", fontSize = 14.sp)
+                                    }
                                 }
 
-                                OutlinedButton(
-                                    onClick = {},
-                                    modifier = Modifier.weight(1f).height(52.dp),
-                                    interactionSource = interactionSource,
-                                    shape = RoundedCornerShape(14.dp),
-                                    enabled = !isProcessing
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                // Main action buttons
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
-                                    Text(if (isRecording) "松开识别" else "说意思", fontSize = 16.sp)
+                                    Button(
+                                        onClick = {
+                                            gaveUp = true
+                                            revealed = true
+                                        },
+                                        modifier = Modifier.weight(1f).height(52.dp),
+                                        shape = RoundedCornerShape(14.dp)
+                                    ) {
+                                        Text("不认识", fontSize = 16.sp)
+                                    }
+
+                                    OutlinedButton(
+                                        onClick = {},
+                                        modifier = Modifier.weight(1f).height(52.dp),
+                                        interactionSource = interactionSource,
+                                        shape = RoundedCornerShape(14.dp),
+                                        enabled = !isProcessing
+                                    ) {
+                                        Text(if (isRecording) "松开识别" else "说意思", fontSize = 16.sp)
+                                    }
                                 }
                             }
                         }
-                    } else {
-                        Button(
-                            onClick = { viewModel.loadNextWord() },
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(end = 12.dp, bottom = 8.dp)
-                                .width(160.dp)
-                                .height(52.dp),
-                            shape = RoundedCornerShape(14.dp)
-                        ) {
-                            Text("下一个", fontSize = 16.sp)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp)
-                            )
+
+                        isDictation -> {
+                            // Stage 2: 默写 —— 一字母一框，实时绿/红反馈
+                            val targetChars = word.word.map { it }
+                            val letterIndexBySlot = run {
+                                var cursor = 0
+                                targetChars.map { ch ->
+                                    if (ch.isLetter()) {
+                                        val idx = cursor
+                                        cursor++
+                                        idx
+                                    } else -1
+                                }
+                            }
+                            val typedLetters = spellingInput.filter { it.isLetter() }
+                            val focusRequester = remember { FocusRequester() }
+                            val commitSpelling: () -> Unit = {
+                                val input = spellingInput.trim()
+                                if (input.isNotEmpty()) {
+                                    if (input.equals(word.word, ignoreCase = true)) {
+                                        spellingPassed = true
+                                        showCelebration = true
+                                        spellingResult = null
+                                    } else {
+                                        spellingResult = "拼写有误，再试试"
+                                    }
+                                }
+                            }
+
+                            Column(
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(end = 12.dp, bottom = 8.dp)
+                                    .width(300.dp),
+                                horizontalAlignment = Alignment.End
+                            ) {
+                                // 字母框 + 非字母分隔符；点击任意处聚焦键盘
+                                BasicTextField(
+                                    value = spellingInput,
+                                    onValueChange = { spellingInput = it; spellingResult = null },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .focusRequester(focusRequester)
+                                        .clickable { focusRequester.requestFocus() },
+                                    singleLine = true,
+                                    textStyle = TextStyle(color = Color.Transparent, fontSize = 1.sp),
+                                    keyboardOptions = KeyboardOptions(
+                                        capitalization = KeyboardCapitalization.None,
+                                        autoCorrectEnabled = false,
+                                        imeAction = ImeAction.Done
+                                    ),
+                                    keyboardActions = KeyboardActions(onDone = { commitSpelling() }),
+                                    decorationBox = { innerTextField ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            targetChars.forEachIndexed { pos, ch ->
+                                                if (ch.isLetter()) {
+                                                    val typed = typedLetters.getOrNull(letterIndexBySlot[pos])
+                                                    val correct =
+                                                        typed != null && typed.equals(ch, ignoreCase = true)
+                                                    val bg = when {
+                                                        typed == null -> Color(0xFFECEFF1) // 未填：浅灰
+                                                        correct -> Color(0xFFE0F2E1)       // 拼对：淡绿
+                                                        else -> Color(0xFFFFEBEE)           // 拼错：淡红
+                                                    }
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(34.dp)
+                                                            .background(bg, RoundedCornerShape(8.dp))
+                                                            .border(
+                                                                1.dp,
+                                                                MaterialTheme.colorScheme.outline
+                                                                    .copy(alpha = 0.4f),
+                                                                RoundedCornerShape(8.dp)
+                                                            ),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Text(
+                                                            text = (typed ?: ' ').toString(),
+                                                            style = MaterialTheme.typography.titleMedium
+                                                                .copy(fontWeight = FontWeight.Bold),
+                                                            color = MaterialTheme.colorScheme.onSurface
+                                                        )
+                                                    }
+                                                } else {
+                                                    Text(
+                                                        text = ch.toString(),
+                                                        style = MaterialTheme.typography.titleMedium
+                                                            .copy(fontWeight = FontWeight.Bold),
+                                                        color = MaterialTheme.colorScheme.outline
+                                                    )
+                                                }
+                                            }
+                                            innerTextField()
+                                        }
+                                    }
+                                )
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Button(
+                                        onClick = {
+                                            gaveUp = true
+                                            revealed = true
+                                        },
+                                        modifier = Modifier.weight(1f).height(52.dp),
+                                        shape = RoundedCornerShape(14.dp)
+                                    ) {
+                                        Text("不认识", fontSize = 16.sp)
+                                    }
+
+                                    Button(
+                                        onClick = { commitSpelling() },
+                                        modifier = Modifier.weight(1f).height(52.dp),
+                                        shape = RoundedCornerShape(14.dp),
+                                        enabled = spellingInput.isNotBlank()
+                                    ) {
+                                        Text("确认", fontSize = 16.sp)
+                                    }
+                                }
+                            }
+                        }
+
+                        else -> {
+                            // Both passed (or gave up) → commit and go next
+                            Button(
+                                onClick = {
+                                    val known = meaningPassed && spellingPassed && !gaveUp
+                                    if (known) viewModel.onCorrectAnswer() else viewModel.onWrongAnswer()
+                                    viewModel.loadNextWord()
+                                },
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(end = 12.dp, bottom = 8.dp)
+                                    .width(160.dp)
+                                    .height(52.dp),
+                                shape = RoundedCornerShape(14.dp)
+                            ) {
+                                Text("下一个", fontSize = 16.sp)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
                     }
                 }
