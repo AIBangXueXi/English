@@ -57,6 +57,7 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -774,10 +775,11 @@ fun WordScreen(
                             // Stage 1: 说意思
                             Column(
                                 modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .padding(end = 12.dp, bottom = 8.dp)
-                                    .width(280.dp),
-                                horizontalAlignment = Alignment.End
+                                    .align(Alignment.BottomCenter)
+                                    .fillMaxWidth()
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 // Manual input
                                 Row(
@@ -840,17 +842,27 @@ fun WordScreen(
                                             revealed = true
                                         },
                                         modifier = Modifier.weight(1f).height(52.dp),
-                                        shape = RoundedCornerShape(14.dp)
+                                        shape = RoundedCornerShape(14.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = Color(0xFF9E9E9E),
+                                            contentColor = Color.White
+                                        )
                                     ) {
                                         Text("不认识", fontSize = 16.sp)
                                     }
 
-                                    OutlinedButton(
+                                    Button(
                                         onClick = {},
                                         modifier = Modifier.weight(1f).height(52.dp),
                                         interactionSource = interactionSource,
                                         shape = RoundedCornerShape(14.dp),
-                                        enabled = !isProcessing
+                                        enabled = !isProcessing,
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = Color(0xFF4CAF50),
+                                            contentColor = Color.White,
+                                            disabledContainerColor = Color(0xFF4CAF50).copy(alpha = 0.5f),
+                                            disabledContentColor = Color.White
+                                        )
                                     ) {
                                         Text(if (isRecording) "松开识别" else "说意思", fontSize = 16.sp)
                                     }
@@ -888,10 +900,11 @@ fun WordScreen(
 
                             Column(
                                 modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .padding(end = 12.dp, bottom = 8.dp)
-                                    .width(300.dp),
-                                horizontalAlignment = Alignment.End
+                                    .align(Alignment.BottomCenter)
+                                    .fillMaxWidth()
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 // 字母框 + 非字母分隔符；点击任意处聚焦键盘
                                 BasicTextField(
@@ -970,7 +983,11 @@ fun WordScreen(
                                             revealed = true
                                         },
                                         modifier = Modifier.weight(1f).height(52.dp),
-                                        shape = RoundedCornerShape(14.dp)
+                                        shape = RoundedCornerShape(14.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = Color(0xFF9E9E9E),
+                                            contentColor = Color.White
+                                        )
                                     ) {
                                         Text("不认识", fontSize = 16.sp)
                                     }
@@ -989,26 +1006,32 @@ fun WordScreen(
 
                         else -> {
                             // Both passed (or gave up) → commit and go next
-                            Button(
-                                onClick = {
-                                    val known = meaningPassed && spellingPassed && !gaveUp
-                                    if (known) viewModel.onCorrectAnswer() else viewModel.onWrongAnswer()
-                                    viewModel.loadNextWord()
-                                },
+                            Box(
                                 modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .padding(end = 12.dp, bottom = 8.dp)
-                                    .width(160.dp)
-                                    .height(52.dp),
-                                shape = RoundedCornerShape(14.dp)
+                                    .align(Alignment.BottomCenter)
+                                    .fillMaxWidth()
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .padding(horizontal = 16.dp, vertical = 12.dp)
                             ) {
-                                Text("下一个", fontSize = 16.sp)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp)
-                                )
+                                Button(
+                                    onClick = {
+                                        val known = meaningPassed && spellingPassed && !gaveUp
+                                        if (known) viewModel.onCorrectAnswer() else viewModel.onWrongAnswer()
+                                        viewModel.loadNextWord()
+                                    },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(52.dp),
+                                    shape = RoundedCornerShape(14.dp)
+                                ) {
+                                    Text("下一个", fontSize = 16.sp)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
                             }
                         }
                     }
