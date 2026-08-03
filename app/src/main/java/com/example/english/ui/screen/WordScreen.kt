@@ -748,30 +748,6 @@ fun WordScreen(
                             }
                         }
 
-                        // Celebration overlay
-                        AnimatedVisibility(
-                            visible = showCelebration,
-                            enter = scaleIn(animationSpec = tween(400)) + fadeIn(animationSpec = tween(400)),
-                            exit = fadeOut(animationSpec = tween(300))
-                        ) {
-                            CelebrationBanner(
-                                visible = showCelebration,
-                                onFinished = { showCelebration = false }
-                            )
-                        }
-
-                        // Retry hint
-                        AnimatedVisibility(
-                            visible = showRetryHint,
-                            enter = fadeIn(animationSpec = tween(300)),
-                            exit = fadeOut(animationSpec = tween(300))
-                        ) {
-                            RetryBanner(
-                                visible = showRetryHint,
-                                onFinished = { showRetryHint = false }
-                            )
-                        }
-
                         // Bottom spacer to avoid overlap with fixed buttons
                         Spacer(modifier = Modifier.height(140.dp))
                     }
@@ -935,7 +911,7 @@ fun WordScreen(
                                     decorationBox = { innerTextField ->
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             targetChars.forEachIndexed { pos, ch ->
@@ -950,8 +926,8 @@ fun WordScreen(
                                                     }
                                                     Box(
                                                         modifier = Modifier
-                                                            .size(44.dp)
-                                                            .background(bg, RoundedCornerShape(8.dp))
+                                                            .size(56.dp)
+                                                            .background(bg, RoundedCornerShape(10.dp))
                                                             .border(
                                                                 1.dp,
                                                                 MaterialTheme.colorScheme.outline
@@ -962,7 +938,7 @@ fun WordScreen(
                                                     ) {
                                                         Text(
                                                             text = (typed ?: ' ').toString(),
-                                                            style = MaterialTheme.typography.titleLarge
+                                                            style = MaterialTheme.typography.headlineSmall
                                                                 .copy(fontWeight = FontWeight.Bold),
                                                             color = MaterialTheme.colorScheme.onSurface
                                                         )
@@ -970,7 +946,7 @@ fun WordScreen(
                                                 } else {
                                                     Text(
                                                         text = ch.toString(),
-                                                        style = MaterialTheme.typography.titleLarge
+                                                        style = MaterialTheme.typography.headlineSmall
                                                             .copy(fontWeight = FontWeight.Bold),
                                                         color = MaterialTheme.colorScheme.outline
                                                     )
@@ -1054,6 +1030,36 @@ fun WordScreen(
                                     )
                                 }
                             }
+                        }
+                    }
+
+                    // 答对/重试提示：全屏居中覆盖层（不再内嵌于滚动内容）
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AnimatedVisibility(
+                            visible = showCelebration,
+                            enter = scaleIn(animationSpec = tween(400)) + fadeIn(animationSpec = tween(400)),
+                            exit = fadeOut(animationSpec = tween(300))
+                        ) {
+                            CelebrationBanner(
+                                visible = showCelebration,
+                                onFinished = { showCelebration = false }
+                            )
+                        }
+
+                        AnimatedVisibility(
+                            visible = showRetryHint,
+                            enter = fadeIn(animationSpec = tween(300)),
+                            exit = fadeOut(animationSpec = tween(300))
+                        ) {
+                            RetryBanner(
+                                visible = showRetryHint,
+                                onFinished = { showRetryHint = false }
+                            )
                         }
                     }
                 }
@@ -1218,8 +1224,21 @@ private fun CelebrationBanner(visible: Boolean, onFinished: () -> Unit) {
         modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
         contentAlignment = Alignment.Center
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(modifier = Modifier.fillMaxWidth().height(48.dp)) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.85f)
+                .background(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f),
+                    shape = RoundedCornerShape(20.dp)
+                )
+                .padding(vertical = 22.dp, horizontal = 16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                contentAlignment = Alignment.Center
+            ) {
                 starColors.forEachIndexed { i, color ->
                     val xOffset = ((i.toFloat() - 2.5f) * 60).dp
                     val delay = i * 100L
@@ -1256,6 +1275,7 @@ private fun CelebrationBanner(visible: Boolean, onFinished: () -> Unit) {
                 color = Color(0xFF4CAF50),
                 textAlign = TextAlign.Center
             )
+            }
         }
     }
 }
