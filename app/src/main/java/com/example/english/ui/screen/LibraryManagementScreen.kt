@@ -212,6 +212,7 @@ fun LibraryManagementScreen(
                             phonetic = word.phonetic,
                             meaning = word.meaning,
                             stage = word.stage,
+                            nextReviewTime = word.nextReviewTime,
                             onDelete = {
                                 pendingDelete = PendingDelete(
                                     LibraryTable.UNKNOWN, word.id, word.word
@@ -298,13 +299,29 @@ private fun matchWord(word: String, phonetic: String, meaning: String, query: St
         meaning.lowercase().contains(q)
 }
 
+/** 把下次复习时间戳格式化为分级的人类可读文本。 */
+private fun formatNextReviewTime(nextReviewTime: Long): String {
+    if (nextReviewTime <= 0) return "现在可复习"
+    val delta = nextReviewTime - System.currentTimeMillis()
+    if (delta <= 0) return "现在可复习"
+    val minutes = delta / (60 * 1000)
+    val hours = delta / (60 * 60 * 1000)
+    val days = delta / (24 * 60 * 60 * 1000)
+    return when {
+        days >= 1 -> "${days}天后"
+        hours >= 1 -> "${hours}小时后"
+        else -> "${if (minutes < 1) 1 else minutes}分钟后"
+    }
+}
+
 @Composable
 private fun WordRow(
     word: String,
     phonetic: String,
     meaning: String,
     onDelete: () -> Unit,
-    stage: Int? = null
+    stage: Int? = null,
+    nextReviewTime: Long? = null
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -335,6 +352,20 @@ private fun WordRow(
                                 text = "第 ${stage + 1} 阶段",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                    if (nextReviewTime != null) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Text(
+                                text = formatNextReviewTime(nextReviewTime),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
