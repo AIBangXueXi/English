@@ -77,10 +77,9 @@ class WordRepository(context: Context) {
         updateStoredSeq(1)
     }
 
-    // Ebbinghaus intervals in millis: 15min, 1h, 1d, 2d, 4d, 7d
+    // Ebbinghaus intervals in millis: 1d, 2d, 4d, 7d
+    // (15min and 1h stages removed)
     private val ebbinghausIntervals = longArrayOf(
-        15 * 60 * 1000L,
-        60 * 60 * 1000L,
         24 * 60 * 60 * 1000L,
         2 * 24 * 60 * 60 * 1000L,
         4 * 24 * 60 * 60 * 1000L,
@@ -94,7 +93,7 @@ class WordRepository(context: Context) {
             unknownDao.deleteById(word.id)
             true
         } else {
-            val nextTime = System.currentTimeMillis() + ebbinghausIntervals[nextStage]
+            val nextTime = System.currentTimeMillis() + ebbinghausIntervals[word.stage]
             unknownDao.updateStage(word.id, nextStage, nextTime)
             false
         }

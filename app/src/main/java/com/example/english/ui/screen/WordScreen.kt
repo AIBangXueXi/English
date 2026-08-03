@@ -403,7 +403,7 @@ fun WordScreen(
                         // Review badge
                         if (active.isReview) {
                             Text(
-                                text = "复习 · 待巩固 ${active.unknownCount} 词",
+                                text = "复习 · 第 ${active.stage + 1} 阶段 · 待巩固 ${active.unknownCount} 词",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color(0xFFFF9800),
                                 modifier = Modifier.padding(top = 8.dp)

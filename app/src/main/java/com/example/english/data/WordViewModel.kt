@@ -19,7 +19,8 @@ sealed class QuizState {
         val word: Word,
         val isReview: Boolean,
         val unknownCount: Int,
-        val knownCount: Int
+        val knownCount: Int,
+        val stage: Int = 0
     ) : QuizState()
     data object Complete : QuizState()
     data class Error(val message: String) : QuizState()
@@ -62,7 +63,8 @@ class WordViewModel(application: Application) : AndroidViewModel(application) {
                         word = unknown.toWord(),
                         isReview = true,
                         unknownCount = unknownCount,
-                        knownCount = knownCount
+                        knownCount = knownCount,
+                        stage = unknown.stage
                     )
                     return@launch
                 }
