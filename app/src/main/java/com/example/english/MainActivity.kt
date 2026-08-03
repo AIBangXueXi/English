@@ -15,6 +15,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -26,6 +27,7 @@ import com.example.english.ui.screen.HomeScreen
 import com.example.english.ui.screen.LibraryManagementScreen
 import com.example.english.ui.screen.WordScreen
 import com.example.english.ui.theme.EnglishTheme
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private lateinit var speechService: SpeechService
@@ -48,6 +50,40 @@ class MainActivity : ComponentActivity() {
             EnglishTheme {
                 var currentScreen by remember { mutableStateOf<Screen>(Screen.Home) }
                 var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
+                var isCheckingUpdate by remember { mutableStateOf(false) }
+                val scope = rememberCoroutineScope()
+
+                val checkForUpdates: () -> Unit = {
+                    scope.launch {
+                        isCheckingUpdate = true
+                        try {
+                            val info = updateManager.checkUpdate()
+                            isCheckingUpdate = false
+                            when {
+                                info == null ->
+                                    Toast.makeText(
+                                        this@MainActivity,
+                                        "检查更新失败，请稍后重试",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                info.hasUpdate -> updateInfo = info
+                                else ->
+                                    Toast.makeText(
+                                        this@MainActivity,
+                                        "已是最新版本 v${BuildConfig.VERSION_NAME}",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                            }
+                        } catch (e: Exception) {
+                            isCheckingUpdate = false
+                            Toast.makeText(
+                                this@MainActivity,
+                                "检查更新失败，请稍后重试",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                }
 
                 LaunchedEffect(Unit) {
                     updateManager.checkUpdate()?.let { info ->
@@ -91,7 +127,9 @@ class MainActivity : ComponentActivity() {
                         },
                         onDictionaryClick = {
                             currentScreen = Screen.LibraryManagement
-                        }
+                        },
+                        onCheckUpdate = checkForUpdates,
+                        isCheckingUpdate = isCheckingUpdate
                     )
                     is Screen.WordPage -> {
                         val wordViewModel: WordViewModel = viewModel()
