@@ -30,6 +30,22 @@ fun resolveStaticUrl(raw: String): String {
     return STATIC_BASE_URL + if (raw.startsWith("/")) raw else "/$raw"
 }
 
+/**
+ * Resolve an audio source string into a playable value.
+ * - Local bundled resources are written as "raw:<resName>" and returned unchanged.
+ * - Everything else (relative path or absolute URL) is passed through [resolveStaticUrl].
+ */
+fun resolveAudioSource(raw: String): String =
+    if (raw.startsWith("raw:", ignoreCase = true)) raw else resolveStaticUrl(raw)
+
+/** Resolve a "raw:<resName>" reference to an Android raw resource id, or 0 if not found. */
+fun resolveRawResId(context: Context, source: String): Int {
+    if (!source.startsWith("raw:", ignoreCase = true)) return 0
+    val name = source.substring(4).trim()
+    if (name.isEmpty()) return 0
+    return context.resources.getIdentifier(name, "raw", context.packageName)
+}
+
 class WordRepository(context: Context) {
     private val db = AppDatabase.getInstance(context)
     private val knownDao = db.knownWordDao()

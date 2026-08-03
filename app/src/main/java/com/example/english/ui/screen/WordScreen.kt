@@ -1,5 +1,6 @@
 package com.example.english.ui.screen
 
+import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioManager
@@ -93,6 +94,7 @@ import com.example.english.data.QuizState
 import com.example.english.data.WordViewModel
 import com.example.english.data.api.DeepSeekService
 import com.example.english.speech.SpeechService
+import com.example.english.data.resolveRawResId
 import com.example.english.data.resolveStaticUrl
 import com.example.english.ui.theme.EnglishTheme
 import kotlinx.coroutines.Dispatchers
@@ -167,6 +169,7 @@ fun WordScreen(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     var playJob by remember { mutableStateOf<Job?>(null) }
     var studySeconds by remember { mutableStateOf(0) }
     var showRestReminder by remember { mutableStateOf(false) }
@@ -216,6 +219,13 @@ fun WordScreen(
                 showCelebration = true
                 spellingResult = null
             }
+        }
+    }
+
+    // 默写成功后播放 res/raw/success.mp3 反馈音
+    LaunchedEffect(showCelebration) {
+        if (showCelebration) {
+            playSuccessSound(context)
         }
     }
 
@@ -269,6 +279,7 @@ fun WordScreen(
                             revealed = true
                         } else {
                             showRetryHint = true
+                            playErrorSound(context)
                         }
                     }
                 }.onFailure { e -> errorMessage = e.message }
@@ -491,7 +502,7 @@ fun WordScreen(
                                             } else {
                                                 isPlayingPronunciation = true
                                                 pronunciationJob = scope.launch {
-                                                    val success = playPronunciation(word.pronunciation)
+                                                    val success = playPronunciation(context, word.pronunciation)
                                                     isPlayingPronunciation = false
                                                     pronunciationPlayer = null
                                                 }
@@ -800,6 +811,7 @@ fun WordScreen(
                                                             manualResult = null
                                                         } else {
                                                             manualResult = "意思不正确，再试试"
+                                                        playErrorSound(context)
                                                         }
                                                     }
                                                 }
@@ -1094,6 +1106,7 @@ private fun EtymologyBreakdown(
     revealed: Boolean
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     var playingIndex by remember { mutableStateOf<Int?>(null) }
     var syllablePlayer by remember { mutableStateOf<MediaPlayer?>(null) }
     var syllableJob by remember { mutableStateOf<Job?>(null) }
@@ -1142,31 +1155,42 @@ private fun EtymologyBreakdown(
                                         playingIndex = index
                                         syllableJob = scope.launch(Dispatchers.IO) {
                                             try {
-                                                val mp = MediaPlayer().apply {
-                                                    setAudioAttributes(
-                                                        AudioAttributes.Builder()
-                                                            .setUsage(AudioAttributes.USAGE_MEDIA)
-                                                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                                                            .build()
-                                                    )
-                                                    setDataSource(pronUrl)
-                                                    setOnCompletionListener { m ->
-                                                        m.release()
-                                                        playingIndex = null
-                                                        syllablePlayer = null
+                                                val mp = if (pronUrl.startsWith("raw:", ignoreCase = true)) {
+                                                    val resId = resolveRawResId(context, pronUrl)
+                                                    if (resId != 0) MediaPlayer.create(context, resId) else null
+                                                } else {
+                                                    MediaPlayer().apply {
+                                                        setAudioAttributes(
+                                                            AudioAttributes.Builder()
+                                                                .setUsage(AudioAttributes.USAGE_MEDIA)
+                                                                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                                                                .build()
+                                                        )
+                                                        setDataSource(pronUrl)
+                                                        setOnCompletionListener { m ->
+                                                            m.release()
+                                                            playingIndex = null
+                                                            syllablePlayer = null
+                                                        }
+                                                        setOnErrorListener { m, _, _ ->
+                                                            m.release()
+                                                            playingIndex = null
+                                                            syllablePlayer = null
+                                                            true
+                                                        }
+                                                        prepare()
+                                                        start()
                                                     }
-                                                    setOnErrorListener { m, _, _ ->
-                                                        m.release()
-                                                        playingIndex = null
-                                                        syllablePlayer = null
-                                                        true
-                                                    }
-                                                    prepare()
-                                                    start()
                                                 }
-                                                syllablePlayer = mp
-                                                while (isActive && mp.isPlaying) {
-                                                    delay(200)
+                                                if (mp == null) {
+                                                    syllablePlayer = null
+                                                    playingIndex = null
+                                                } else {
+                                                    if (pronUrl.startsWith("raw:", ignoreCase = true)) mp.start()
+                                                    syllablePlayer = mp
+                                                    while (isActive && mp.isPlaying) {
+                                                        delay(200)
+                                                    }
                                                 }
                                             } catch (_: Exception) {
                                                 syllablePlayer = null
@@ -1402,21 +1426,72 @@ private suspend fun playPcm(pcmData: ByteArray?) = withContext(Dispatchers.IO) {
     }
 }
 
-/** Play audio from a URL via MediaPlayer. Returns true if playback started successfully. */
-private suspend fun playPronunciation(url: String): Boolean = withContext(Dispatchers.IO) {
+/**
+ * Play the bundled success feedback sound (res/raw/success.mp3) once.
+ * One-shot: the MediaPlayer releases itself when playback finishes.
+ */
+private fun playSuccessSound(context: Context) {
     try {
-        val mp = MediaPlayer()
-        mp.setAudioAttributes(
-            AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_MEDIA)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                .build()
-        )
-        mp.setDataSource(url)
+        val resId = resolveRawResId(context, "raw:success")
+        if (resId == 0) return
+        val mp = MediaPlayer.create(context, resId) ?: return
+        mp.setOnCompletionListener { it.release() }
+        mp.setOnErrorListener { m, _, _ -> m.release(); true }
+        mp.start()
+    } catch (_: Exception) {
+        // ignore — feedback sound is non-critical
+    }
+}
+
+/**
+ * Play the bundled error feedback sound (res/raw/error.mp3) once.
+ * One-shot: the MediaPlayer releases itself when playback finishes.
+ */
+private fun playErrorSound(context: Context) {
+    try {
+        val resId = resolveRawResId(context, "raw:error")
+        if (resId == 0) return
+        val mp = MediaPlayer.create(context, resId) ?: return
+        mp.setOnCompletionListener { it.release() }
+        mp.setOnErrorListener { m, _, _ -> m.release(); true }
+        mp.start()
+    } catch (_: Exception) {
+        // ignore — feedback sound is non-critical
+    }
+}
+
+/**
+ * Play audio via MediaPlayer. Supports two source forms:
+ * - "raw:<resName>" -> a file bundled in res/raw/ (offline playback).
+ * - anything else    -> treated as a URL (online playback).
+ * Returns true if playback started successfully.
+ */
+private suspend fun playPronunciation(context: Context, source: String): Boolean = withContext(Dispatchers.IO) {
+    try {
+        val mp = if (source.startsWith("raw:", ignoreCase = true)) {
+            val resId = resolveRawResId(context, source)
+            if (resId == 0) return@withContext false
+            MediaPlayer.create(context, resId) ?: return@withContext false
+        } else {
+            MediaPlayer().apply {
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build()
+                )
+                setDataSource(source)
+            }
+        }
         mp.setOnCompletionListener { mp -> mp.release() }
         mp.setOnErrorListener { mp, _, _ -> mp.release(); true }
-        mp.prepare()
-        mp.start()
+        if (source.startsWith("raw:", ignoreCase = true)) {
+            // MediaPlayer.create() already prepares the resource.
+            mp.start()
+        } else {
+            mp.prepare()
+            mp.start()
+        }
         // Wait for playback to complete or be cancelled
         while (isActive && mp.isPlaying) {
             delay(200)
