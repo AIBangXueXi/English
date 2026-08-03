@@ -19,6 +19,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.english.data.WordRepository
 import com.example.english.data.WordViewModel
 import com.example.english.data.update.UpdateInfo
 import com.example.english.data.update.UpdateManager
@@ -51,7 +52,15 @@ class MainActivity : ComponentActivity() {
                 var currentScreen by remember { mutableStateOf<Screen>(Screen.Home) }
                 var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
                 var isCheckingUpdate by remember { mutableStateOf(false) }
+                var knownCount by remember { mutableStateOf(0) }
+                var unknownCount by remember { mutableStateOf(0) }
                 val scope = rememberCoroutineScope()
+
+                LaunchedEffect(Unit) {
+                    val repo = WordRepository(this@MainActivity)
+                    knownCount = repo.getKnownCount()
+                    unknownCount = repo.getUnknownCount()
+                }
 
                 val checkForUpdates: () -> Unit = {
                     scope.launch {
@@ -129,7 +138,9 @@ class MainActivity : ComponentActivity() {
                             currentScreen = Screen.LibraryManagement
                         },
                         onCheckUpdate = checkForUpdates,
-                        isCheckingUpdate = isCheckingUpdate
+                        isCheckingUpdate = isCheckingUpdate,
+                        knownCount = knownCount,
+                        unknownCount = unknownCount
                     )
                     is Screen.WordPage -> {
                         val wordViewModel: WordViewModel = viewModel()
