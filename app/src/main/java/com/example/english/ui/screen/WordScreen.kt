@@ -10,6 +10,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -1213,6 +1214,12 @@ private fun CelebrationBanner(visible: Boolean, onFinished: () -> Unit) {
         animationSpec = tween(500)
     )
 
+    // 小球从左/右两侧慢慢靠拢到中心
+    val converge by animateFloatAsState(
+        targetValue = if (visible) 0f else 1f,
+        animationSpec = tween(durationMillis = 1600, easing = LinearOutSlowInEasing)
+    )
+
     if (visible) {
         LaunchedEffect(Unit) {
             kotlinx.coroutines.delay(2500)
@@ -1240,7 +1247,8 @@ private fun CelebrationBanner(visible: Boolean, onFinished: () -> Unit) {
                 contentAlignment = Alignment.Center
             ) {
                 starColors.forEachIndexed { i, color ->
-                    val xOffset = ((i.toFloat() - 2.5f) * 60).dp
+                    val baseOffset = (i.toFloat() - 2.5f) * 60
+                    val xOffset = (baseOffset * converge).dp
                     val delay = i * 100L
                     val animScale by animateFloatAsState(
                         targetValue = if (visible) 1f else 0f,

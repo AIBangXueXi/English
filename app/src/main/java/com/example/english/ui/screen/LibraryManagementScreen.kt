@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -16,8 +17,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Clear
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.AlertDialog
@@ -27,7 +30,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -71,6 +76,19 @@ fun LibraryManagementScreen(
     var pendingDelete by remember { mutableStateOf<PendingDelete?>(null) }
     var knownExpanded by remember { mutableStateOf(false) }
     var unknownExpanded by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
+
+    val filteredKnown = remember(knownWords, searchQuery) {
+        if (searchQuery.isBlank()) knownWords
+        else knownWords.filter { matchWord(it.word, it.phonetic, it.meaning, searchQuery) }
+    }
+    val filteredUnknown = remember(unknownWords, searchQuery) {
+        if (searchQuery.isBlank()) unknownWords
+        else unknownWords.filter { matchWord(it.word, it.phonetic, it.meaning, searchQuery) }
+    }
+    // 搜索时自动展开两个分组，方便直接看到结果
+    val effectiveKnownExpanded = knownExpanded || searchQuery.isNotBlank()
+    val effectiveUnknownExpanded = unknownExpanded || searchQuery.isNotBlank()
 
     LaunchedEffect(Unit) {
         viewModel.refreshLibrary()
@@ -121,18 +139,43 @@ fun LibraryManagementScreen(
             }
 
             item {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("搜索单词或释义") },
+                    leadingIcon = {
+                        Icon(Icons.Rounded.Search, contentDescription = null)
+                    },
+                    trailingIcon = {
+                        if (searchQuery.isNotBlank()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Rounded.Clear, contentDescription = "清空")
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
+                )
+            }
+
+            item {
                 SectionHeader(
                     title = "已掌握单词",
-                    count = knownWords.size,
-                    expanded = knownExpanded,
+                    count = filteredKnown.size,
+                    expanded = effectiveKnownExpanded,
                     onToggle = { knownExpanded = !knownExpanded }
                 )
             }
-            if (knownExpanded) {
-                if (knownWords.isEmpty()) {
-                    item { EmptyHint("暂无已掌握单词") }
+            if (effectiveKnownExpanded) {
+                if (filteredKnown.isEmpty()) {
+                    item {
+                        EmptyHint(
+                            if (searchQuery.isBlank()) "暂无已掌握单词" else "未找到匹配的已掌握单词"
+                        )
+                    }
                 } else {
-                    items(knownWords, key = { it.id }) { word ->
+                    items(filteredKnown, key = { it.id }) { word ->
                         WordRow(
                             word = word.word,
                             phonetic = word.phonetic,
@@ -150,20 +193,25 @@ fun LibraryManagementScreen(
             item {
                 SectionHeader(
                     title = "待复习单词",
-                    count = unknownWords.size,
-                    expanded = unknownExpanded,
+                    count = filteredUnknown.size,
+                    expanded = effectiveUnknownExpanded,
                     onToggle = { unknownExpanded = !unknownExpanded }
                 )
             }
-            if (unknownExpanded) {
-                if (unknownWords.isEmpty()) {
-                    item { EmptyHint("暂无待复习单词") }
+            if (effectiveUnknownExpanded) {
+                if (filteredUnknown.isEmpty()) {
+                    item {
+                        EmptyHint(
+                            if (searchQuery.isBlank()) "暂无待复习单词" else "未找到匹配的待复习单词"
+                        )
+                    }
                 } else {
-                    items(unknownWords, key = { it.id }) { word ->
+                    items(filteredUnknown, key = { it.id }) { word ->
                         WordRow(
                             word = word.word,
                             phonetic = word.phonetic,
                             meaning = word.meaning,
+                            stage = word.stage,
                             onDelete = {
                                 pendingDelete = PendingDelete(
                                     LibraryTable.UNKNOWN, word.id, word.word
@@ -241,12 +289,22 @@ private fun EmptyHint(text: String) {
     )
 }
 
+/** 按单词 / 音标 / 释义做不区分大小写的子串匹配。 */
+private fun matchWord(word: String, phonetic: String, meaning: String, query: String): Boolean {
+    val q = query.trim().lowercase()
+    if (q.isEmpty()) return true
+    return word.lowercase().contains(q) ||
+        phonetic.lowercase().contains(q) ||
+        meaning.lowercase().contains(q)
+}
+
 @Composable
 private fun WordRow(
     word: String,
     phonetic: String,
     meaning: String,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    stage: Int? = null
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -261,11 +319,27 @@ private fun WordRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = word,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = word,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    if (stage != null) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Text(
+                                text = "第 ${stage + 1} 阶段",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
                 if (phonetic.isNotBlank()) {
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
