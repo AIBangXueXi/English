@@ -415,6 +415,13 @@ fun WordScreen(
                         // The full word (hidden during dictation so the user must recall the spelling)
                         if (isDictation) {
                             Text(
+                                text = "第 2 步 · 默写",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
+                                color = MaterialTheme.colorScheme.primary,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
                                 text = "＿＿＿",
                                 style = MaterialTheme.typography.displaySmall.copy(
                                     fontWeight = FontWeight.Bold,
@@ -425,9 +432,9 @@ fun WordScreen(
                             )
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
-                                text = "根据意思默写单词拼写",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.primary,
+                                text = "拼写该单词",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.error,
                                 textAlign = TextAlign.Center
                             )
                         } else {
@@ -885,6 +892,9 @@ fun WordScreen(
                             }
                             val typedLetters = spellingInput.filter { it.isLetter() }
                             val focusRequester = remember { FocusRequester() }
+                            LaunchedEffect(isDictation, currentWord) {
+                                focusRequester.requestFocus()
+                            }
                             val commitSpelling: () -> Unit = {
                                 val input = spellingInput.trim()
                                 if (input.isNotEmpty()) {
@@ -925,7 +935,7 @@ fun WordScreen(
                                     decorationBox = { innerTextField ->
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             targetChars.forEachIndexed { pos, ch ->
@@ -940,7 +950,7 @@ fun WordScreen(
                                                     }
                                                     Box(
                                                         modifier = Modifier
-                                                            .size(34.dp)
+                                                            .size(44.dp)
                                                             .background(bg, RoundedCornerShape(8.dp))
                                                             .border(
                                                                 1.dp,
@@ -952,7 +962,7 @@ fun WordScreen(
                                                     ) {
                                                         Text(
                                                             text = (typed ?: ' ').toString(),
-                                                            style = MaterialTheme.typography.titleMedium
+                                                            style = MaterialTheme.typography.titleLarge
                                                                 .copy(fontWeight = FontWeight.Bold),
                                                             color = MaterialTheme.colorScheme.onSurface
                                                         )
@@ -960,7 +970,7 @@ fun WordScreen(
                                                 } else {
                                                     Text(
                                                         text = ch.toString(),
-                                                        style = MaterialTheme.typography.titleMedium
+                                                        style = MaterialTheme.typography.titleLarge
                                                             .copy(fontWeight = FontWeight.Bold),
                                                         color = MaterialTheme.colorScheme.outline
                                                     )
@@ -972,6 +982,17 @@ fun WordScreen(
                                 )
 
                                 Spacer(modifier = Modifier.height(8.dp))
+
+                                if (spellingInput.isEmpty()) {
+                                    Text(
+                                        text = "用键盘在字母框中拼写，全部拼对会自动进入下一步",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.error,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                }
 
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
