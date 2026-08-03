@@ -28,6 +28,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -136,7 +138,7 @@ private val syllableColors = listOf(
     Color(0xFF50B86C)
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun WordScreen(
     viewModel: WordViewModel,
@@ -922,10 +924,11 @@ fun WordScreen(
                                     ),
                                     keyboardActions = KeyboardActions(onDone = { commitSpelling() }),
                                     decorationBox = { innerTextField ->
-                                        Row(
+                                        FlowRow(
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
-                                            verticalAlignment = Alignment.CenterVertically
+                                            verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically),
+                                            maxItemsInEachRow = Int.MAX_VALUE
                                         ) {
                                             targetChars.forEachIndexed { pos, ch ->
                                                 if (ch.isLetter()) {

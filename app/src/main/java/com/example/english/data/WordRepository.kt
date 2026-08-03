@@ -116,7 +116,8 @@ class WordRepository(context: Context) {
     }
 
     suspend fun onUnknownWordWrong(word: UnknownWord) = withContext(Dispatchers.IO) {
-        unknownDao.updateStage(word.id, 0, 0)
+        // 答错后回到第 1 阶段，但下一次复习按第一阶段间隔排期（+1天），而不是立即（0=立即可复习）
+        unknownDao.updateStage(word.id, 0, System.currentTimeMillis() + ebbinghausIntervals.first())
     }
 
     suspend fun addToKnown(apiWord: ApiWord) = withContext(Dispatchers.IO) {
@@ -124,7 +125,14 @@ class WordRepository(context: Context) {
     }
 
     suspend fun addToUnknown(apiWord: ApiWord) = withContext(Dispatchers.IO) {
-        unknownDao.insert(apiWord.toUnknownWord())
+        // 首次标记为不认识：进入待复习，第一次复习按第一阶段间隔排期（+1天），而非立即（0）
+        val firstInterval = ebbinghausIntervals.first()
+        unknownDao.insert(
+            apiWord.toUnknownWord(
+                stage = 0,
+                nextReviewTime = System.currentTimeMillis() + firstInterval
+            )
+        )
     }
 
     fun getStoredSeq(): Int = prefs.getInt("next_seq", 1)
@@ -158,7 +166,7 @@ class WordRepository(context: Context) {
         remark = remark
     )
 
-    private fun ApiWord.toUnknownWord() = UnknownWord(
+    private fun ApiWord.toUnknownWord(stage: Int = 0, nextReviewTime: Long = 0) = UnknownWord(
         wordId = id,
         word = word,
         phonetic = phonetic,
@@ -172,7 +180,9 @@ class WordRepository(context: Context) {
         presentParticiple = presentParticiple,
         pastTense = pastTense,
         categoryName = categoryName,
-        remark = remark
+        remark = remark,
+        stage = stage,
+        nextReviewTime = nextReviewTime
     )
 
     private fun UnknownWord.toKnownWord() = KnownWord(
