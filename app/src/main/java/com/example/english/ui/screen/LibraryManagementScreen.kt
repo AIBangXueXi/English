@@ -190,7 +190,7 @@ fun LibraryManagementScreen(
                         )
                     }
                 } else {
-                    items(filteredKnown, key = { it.id }) { word ->
+                    items(filteredKnown, key = { "known_${it.id}" }) { word ->
                         WordRow(
                             word = word.word,
                             phonetic = word.phonetic,
@@ -221,7 +221,7 @@ fun LibraryManagementScreen(
                         )
                     }
                 } else {
-                    items(filteredUnknown, key = { it.id }) { word ->
+                    items(filteredUnknown, key = { "unknown_${it.id}" }) { word ->
                         WordRow(
                             word = word.word,
                             phonetic = word.phonetic,
