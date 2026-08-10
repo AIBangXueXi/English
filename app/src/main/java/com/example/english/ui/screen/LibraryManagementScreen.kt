@@ -18,12 +18,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Clear
+import android.media.AudioAttributes
+import android.media.MediaPlayer
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -43,6 +46,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,6 +61,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.english.data.WordViewModel
 import com.example.english.data.entity.KnownWord
 import com.example.english.data.entity.UnknownWord
+import com.example.english.data.resolveStaticUrl
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private enum class LibraryTable { KNOWN, UNKNOWN }
 
@@ -92,6 +102,35 @@ fun LibraryManagementScreen(
     // 搜索时自动展开两个分组，方便直接看到结果
     val effectiveKnownExpanded = knownExpanded || searchQuery.isNotBlank()
     val effectiveUnknownExpanded = unknownExpanded || searchQuery.isNotBlank()
+
+    val scope = rememberCoroutineScope()
+
+    val playPronunciation: (String) -> Unit = { source ->
+        val url = resolveStaticUrl(source)
+        if (url.isNotEmpty()) {
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                try {
+                    val mp = android.media.MediaPlayer().apply {
+                        setAudioAttributes(
+                            AudioAttributes.Builder()
+                                .setUsage(AudioAttributes.USAGE_MEDIA)
+                                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                                .build()
+                        )
+                        setDataSource(url)
+                        setOnCompletionListener { it.release() }
+                        setOnErrorListener { m, _, _ -> m.release(); true }
+                        prepare()
+                        start()
+                    }
+                    while (isActive && mp.isPlaying) { delay(200) }
+                    try { mp.release() } catch (_: Exception) {}
+                } catch (_: Exception) { }
+            }
+        }
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.refreshLibrary()
@@ -195,11 +234,13 @@ fun LibraryManagementScreen(
                             word = word.word,
                             phonetic = word.phonetic,
                             meaning = word.meaning,
+                            pronunciation = word.pronunciation,
                             onDelete = {
                                 pendingDelete = PendingDelete(
                                     LibraryTable.KNOWN, word.id, word.word
                                 )
-                            }
+                            },
+                            onPlay = { playPronunciation(word.pronunciation) }
                         )
                     }
                 }
@@ -226,13 +267,15 @@ fun LibraryManagementScreen(
                             word = word.word,
                             phonetic = word.phonetic,
                             meaning = word.meaning,
+                            pronunciation = word.pronunciation,
                             stage = word.stage,
                             nextReviewTime = word.nextReviewTime,
                             onDelete = {
                                 pendingDelete = PendingDelete(
                                     LibraryTable.UNKNOWN, word.id, word.word
                                 )
-                            }
+                            },
+                            onPlay = { playPronunciation(word.pronunciation) }
                         )
                     }
                 }
@@ -334,7 +377,9 @@ private fun WordRow(
     word: String,
     phonetic: String,
     meaning: String,
+    pronunciation: String = "",
     onDelete: () -> Unit,
+    onPlay: () -> Unit = {},
     stage: Int? = null,
     nextReviewTime: Long? = null
 ) {
@@ -402,6 +447,15 @@ private fun WordRow(
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            if (pronunciation.isNotBlank()) {
+                IconButton(onClick = onPlay) {
+                    Icon(
+                        imageVector = Icons.Rounded.VolumeUp,
+                        contentDescription = "播放读音",
+                        tint = MaterialTheme.colorScheme.primary
                     )
                 }
             }
