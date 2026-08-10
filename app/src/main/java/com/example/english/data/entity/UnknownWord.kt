@@ -21,5 +21,6 @@ data class UnknownWord(
     val categoryName: String = "",
     val remark: String = "",
     val stage: Int = 0,
-    val nextReviewTime: Long = 0
+    val nextReviewTime: Long = 0,
+    val repeatVoice: String = ""
 )

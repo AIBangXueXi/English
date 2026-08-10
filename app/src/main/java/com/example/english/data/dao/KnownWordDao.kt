@@ -19,4 +19,7 @@ interface KnownWordDao {
 
     @Query("SELECT * FROM known_words ORDER BY id DESC")
     suspend fun getAll(): List<KnownWord>
+
+    @Query("UPDATE known_words SET repeatVoice = :repeatVoice WHERE wordId = :wordId")
+    suspend fun updateRepeatVoice(wordId: String, repeatVoice: String)
 }

@@ -124,7 +124,8 @@ data class Word(
     val presentParticiple: String = "",
     val pastTense: String = "",
     val categoryName: String = "",
-    val remark: String = ""
+    val remark: String = "",
+    val repeatVoice: String = ""
 ) {
     val syllables: List<Syllable>
         get() = if (etymology.isNotEmpty() && etymologyPhonetic.isNotEmpty())

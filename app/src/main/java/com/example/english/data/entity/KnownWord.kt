@@ -19,5 +19,6 @@ data class KnownWord(
     val presentParticiple: String = "",
     val pastTense: String = "",
     val categoryName: String = "",
-    val remark: String = ""
+    val remark: String = "",
+    val repeatVoice: String = ""
 )

@@ -21,6 +21,7 @@ import androidx.compose.material.icons.rounded.Clear
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.AlertDialog
@@ -69,7 +70,9 @@ private data class PendingDelete(
 @Composable
 fun LibraryManagementScreen(
     viewModel: WordViewModel,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onSync: () -> Unit = {},
+    isSyncing: Boolean = false
 ) {
     val knownWords by viewModel.libraryKnownWords.collectAsStateWithLifecycle()
     val unknownWords by viewModel.libraryUnknownWords.collectAsStateWithLifecycle()
@@ -103,6 +106,18 @@ fun LibraryManagementScreen(
                         Icon(
                             Icons.AutoMirrored.Rounded.ArrowBack,
                             contentDescription = "返回"
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onSync, enabled = !isSyncing) {
+                        Icon(
+                            imageVector = Icons.Rounded.Sync,
+                            contentDescription = "同步",
+                            tint = if (isSyncing)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                            else
+                                MaterialTheme.colorScheme.primary
                         )
                     }
                 },

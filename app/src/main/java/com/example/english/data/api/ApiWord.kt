@@ -9,6 +9,7 @@ data class ApiWord(
     val etymology: List<String>,
     val etymologyPhonetic: List<String>,
     val etymologyPronunciation: List<String>,
+    val repeatVoice: String = "",
     val translation: String,
     val plural: String,
     val thirdPersonSingular: String,

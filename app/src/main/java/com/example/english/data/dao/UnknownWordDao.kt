@@ -28,4 +28,7 @@ interface UnknownWordDao {
 
     @Query("DELETE FROM unknown_words WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    @Query("UPDATE unknown_words SET repeatVoice = :repeatVoice WHERE wordId = :wordId")
+    suspend fun updateRepeatVoice(wordId: String, repeatVoice: String)
 }

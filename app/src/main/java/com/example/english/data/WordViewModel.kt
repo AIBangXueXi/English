@@ -169,6 +169,22 @@ class WordViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Sync: re-fetch all words from the server to update local repeatVoice fields. */
+    fun syncFromServer(onResult: (Int) -> Unit = {}) {
+        viewModelScope.launch {
+            val count = repository.syncFromServer()
+            refreshLibrary()
+            onResult(count)
+        }
+    }
+
+    /** Get list of unknown words that have repeatVoice for 磨耳 playback. */
+    suspend fun getMoErWords(): List<String> {
+        return repository.getUnknownWords()
+            .filter { it.repeatVoice.isNotBlank() }
+            .map { resolveStaticUrl(it.repeatVoice) }
+    }
+
     private fun ApiWord.toWord() = Word(
         word = word,
         phonetic = phonetic,
@@ -182,7 +198,8 @@ class WordViewModel(application: Application) : AndroidViewModel(application) {
         presentParticiple = presentParticiple,
         pastTense = pastTense,
         categoryName = categoryName,
-        remark = remark
+        remark = remark,
+        repeatVoice = resolveStaticUrl(repeatVoice)
     )
 
     private fun UnknownWord.toWord() = Word(
@@ -198,7 +215,8 @@ class WordViewModel(application: Application) : AndroidViewModel(application) {
         presentParticiple = presentParticiple,
         pastTense = pastTense,
         categoryName = categoryName,
-        remark = remark
+        remark = remark,
+        repeatVoice = resolveStaticUrl(repeatVoice)
     )
 
     private fun fromJsonList(json: String): List<String> {

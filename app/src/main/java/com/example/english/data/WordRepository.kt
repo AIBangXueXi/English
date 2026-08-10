@@ -149,6 +149,31 @@ class WordRepository(context: Context) {
     suspend fun deleteKnownWord(id: Long) = withContext(Dispatchers.IO) { knownDao.deleteById(id) }
     suspend fun deleteUnknownWord(id: Long) = withContext(Dispatchers.IO) { unknownDao.deleteById(id) }
 
+    /** Sync: reset seq, re-fetch all words from server, update local repeatVoice fields. */
+    suspend fun syncFromServer(): Int = withContext(Dispatchers.IO) {
+        var fetched = 0
+        try {
+            updateStoredSeq(1)
+            var seq = 1
+            while (true) {
+                val response = api.getWords(seq = seq, num = 50)
+                if (response.code != 0 || response.data.isEmpty()) break
+                val words = response.data
+                fetched += words.size
+                // Update repeatVoice for matching local words
+                for (w in words) {
+                    if (w.repeatVoice.isNotBlank()) {
+                        knownDao.updateRepeatVoice(w.id, w.repeatVoice)
+                        unknownDao.updateRepeatVoice(w.id, w.repeatVoice)
+                    }
+                }
+                seq += words.size
+                if (words.size < 50) break
+            }
+        } catch (_: Exception) { }
+        fetched
+    }
+
     private fun ApiWord.toKnownWord() = KnownWord(
         wordId = id,
         word = word,
@@ -163,7 +188,8 @@ class WordRepository(context: Context) {
         presentParticiple = presentParticiple,
         pastTense = pastTense,
         categoryName = categoryName,
-        remark = remark
+        remark = remark,
+        repeatVoice = repeatVoice
     )
 
     private fun ApiWord.toUnknownWord(stage: Int = 0, nextReviewTime: Long = 0) = UnknownWord(
@@ -181,6 +207,7 @@ class WordRepository(context: Context) {
         pastTense = pastTense,
         categoryName = categoryName,
         remark = remark,
+        repeatVoice = repeatVoice,
         stage = stage,
         nextReviewTime = nextReviewTime
     )
@@ -199,6 +226,7 @@ class WordRepository(context: Context) {
         presentParticiple = presentParticiple,
         pastTense = pastTense,
         categoryName = categoryName,
-        remark = remark
+        remark = remark,
+        repeatVoice = repeatVoice
     )
 }

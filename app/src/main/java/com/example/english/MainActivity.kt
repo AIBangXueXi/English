@@ -2,6 +2,8 @@ package com.example.english
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
+import android.media.MediaPlayer
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -28,7 +30,10 @@ import com.example.english.ui.screen.HomeScreen
 import com.example.english.ui.screen.LibraryManagementScreen
 import com.example.english.ui.screen.WordScreen
 import com.example.english.ui.theme.EnglishTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     private lateinit var speechService: SpeechService
@@ -52,14 +57,89 @@ class MainActivity : ComponentActivity() {
                 var currentScreen by remember { mutableStateOf<Screen>(Screen.Home) }
                 var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
                 var isCheckingUpdate by remember { mutableStateOf(false) }
+                var isSyncing by remember { mutableStateOf(false) }
+                var isMoErPlaying by remember { mutableStateOf(false) }
+                var moErCurrentWord by remember { mutableStateOf("") }
                 var knownCount by remember { mutableStateOf(0) }
                 var unknownCount by remember { mutableStateOf(0) }
                 val scope = rememberCoroutineScope()
+                val syncViewModel: WordViewModel = viewModel()
 
                 LaunchedEffect(Unit) {
                     val repo = WordRepository(this@MainActivity)
                     knownCount = repo.getKnownCount()
                     unknownCount = repo.getUnknownCount()
+                }
+
+                val onSync: () -> Unit = {
+                    scope.launch {
+                        isSyncing = true
+                        syncViewModel.syncFromServer { count ->
+                            isSyncing = false
+                            Toast.makeText(
+                                this@MainActivity,
+                                "同步完成，更新了 $count 个单词",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                            scope.launch {
+                                knownCount = WordRepository(this@MainActivity).getKnownCount()
+                                unknownCount = WordRepository(this@MainActivity).getUnknownCount()
+                            }
+                        }
+                    }
+                }
+
+                val onMoEr: () -> Unit = {
+                    scope.launch {
+                        if (isMoErPlaying) {
+                            isMoErPlaying = false
+                            return@launch
+                        }
+                        isMoErPlaying = true
+                        val urls = syncViewModel.getMoErWords()
+                        if (urls.isEmpty()) {
+                            isMoErPlaying = false
+                            Toast.makeText(
+                                this@MainActivity,
+                                "没有可播放的磨耳音频，请先同步数据",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                            return@launch
+                        }
+                        withContext(Dispatchers.IO) {
+                            var i = 0
+                            while (isMoErPlaying && i < urls.size) {
+                                moErCurrentWord = "播放中 (${i + 1}/${urls.size})"
+                                try {
+                                    val mp = MediaPlayer().apply {
+                                        setAudioAttributes(
+                                            AudioAttributes.Builder()
+                                                .setUsage(AudioAttributes.USAGE_MEDIA)
+                                                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                                                .build()
+                                        )
+                                        setDataSource(urls[i])
+                                        setOnCompletionListener { it.release() }
+                                        setOnErrorListener { m, _, _ -> m.release(); true }
+                                        prepare()
+                                        start()
+                                    }
+                                    while (isMoErPlaying && mp.isPlaying) {
+                                        delay(500)
+                                    }
+                                    try { mp.release() } catch (_: Exception) {}
+                                } catch (_: Exception) { }
+                                i++
+                                // Gap between words
+                                if (isMoErPlaying && i < urls.size) delay(2000)
+                            }
+                        }
+                        isMoErPlaying = false
+                        moErCurrentWord = ""
+                        if (urls.isNotEmpty()) {
+                            Toast.makeText(this@MainActivity, "磨耳播放完成", Toast.LENGTH_SHORT).show()
+                        }
+                    }
                 }
 
                 val checkForUpdates: () -> Unit = {
@@ -137,6 +217,7 @@ class MainActivity : ComponentActivity() {
                         onDictionaryClick = {
                             currentScreen = Screen.LibraryManagement
                         },
+                        onMoErClick = onMoEr,
                         onCheckUpdate = checkForUpdates,
                         isCheckingUpdate = isCheckingUpdate,
                         knownCount = knownCount,
@@ -154,7 +235,9 @@ class MainActivity : ComponentActivity() {
                         val libraryViewModel: WordViewModel = viewModel()
                         LibraryManagementScreen(
                             viewModel = libraryViewModel,
-                            onBack = { currentScreen = Screen.Home }
+                            onBack = { currentScreen = Screen.Home },
+                            onSync = onSync,
+                            isSyncing = isSyncing
                         )
                     }
                 }

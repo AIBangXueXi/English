@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Bookmarks
 import androidx.compose.material.icons.rounded.FormatQuote
+import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.rounded.TrendingUp
@@ -51,6 +52,7 @@ fun HomeScreen(
     onPhraseClick: () -> Unit = {},
     onReadClick: () -> Unit = {},
     onDictionaryClick: () -> Unit = {},
+    onMoErClick: () -> Unit = {},
     onCheckUpdate: () -> Unit = {},
     isCheckingUpdate: Boolean = false,
     knownCount: Int = 0,
@@ -208,12 +210,12 @@ fun HomeScreen(
 
                 ModuleRow(
                     module1 = ModuleItem("背单词", "每日词汇记忆训练", Icons.Rounded.School, onWordClick),
-                    module2 = ModuleItem("学短语", "常用短语搭配练习", Icons.Rounded.FormatQuote, onPhraseClick),
+                    module2 = ModuleItem("磨耳训练", "不认识单词循环播放", Icons.Rounded.Headphones, onMoErClick),
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 ModuleRow(
-                    module1 = ModuleItem("读短文", "阅读英文原版短篇", Icons.AutoMirrored.Rounded.MenuBook, onReadClick),
-                    module2 = ModuleItem("本地词库", "管理你的专属词汇", Icons.Rounded.Bookmarks, onDictionaryClick),
+                    module1 = ModuleItem("本地词库", "管理你的专属词汇", Icons.Rounded.Bookmarks, onDictionaryClick),
+                    module2 = ModuleItem("读短文", "阅读英文原版短篇", Icons.AutoMirrored.Rounded.MenuBook, onReadClick),
                 )
 
                 Spacer(modifier = Modifier.weight(1f))
