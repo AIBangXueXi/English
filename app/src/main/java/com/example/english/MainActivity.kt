@@ -65,10 +65,12 @@ class MainActivity : ComponentActivity() {
                 val scope = rememberCoroutineScope()
                 val syncViewModel: WordViewModel = viewModel()
 
-                LaunchedEffect(Unit) {
-                    val repo = WordRepository(this@MainActivity)
-                    knownCount = repo.getKnownCount()
-                    unknownCount = repo.getUnknownCount()
+                LaunchedEffect(currentScreen) {
+                    if (currentScreen is Screen.Home) {
+                        val repo = WordRepository(this@MainActivity)
+                        knownCount = repo.getKnownCount()
+                        unknownCount = repo.getUnknownCount()
+                    }
                 }
 
                 val onSync: () -> Unit = {
