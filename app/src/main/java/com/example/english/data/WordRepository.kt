@@ -149,29 +149,53 @@ class WordRepository(context: Context) {
     suspend fun deleteKnownWord(id: Long) = withContext(Dispatchers.IO) { knownDao.deleteById(id) }
     suspend fun deleteUnknownWord(id: Long) = withContext(Dispatchers.IO) { unknownDao.deleteById(id) }
 
-    /** Sync: reset seq, re-fetch all words from server, update local repeatVoice fields. */
+    /** Sync: fetch all words from server, update all local known/unknown words with latest data. */
     suspend fun syncFromServer(): Int = withContext(Dispatchers.IO) {
-        var fetched = 0
+        var updated = 0
         try {
-            updateStoredSeq(1)
+            // 1) Fetch all words from server
+            val serverWords = mutableMapOf<String, ApiWord>()
             var seq = 1
             while (true) {
-                val response = api.getWords(seq = seq, num = 50)
+                val response = api.getWords(seq = seq, num = 100)
                 if (response.code != 0 || response.data.isEmpty()) break
-                val words = response.data
-                fetched += words.size
-                // Update repeatVoice for matching local words
-                for (w in words) {
-                    if (w.repeatVoice.isNotBlank()) {
-                        knownDao.updateRepeatVoice(w.id, w.repeatVoice)
-                        unknownDao.updateRepeatVoice(w.id, w.repeatVoice)
-                    }
+                for (w in response.data) {
+                    serverWords[w.id] = w
                 }
-                seq += words.size
-                if (words.size < 50) break
+                seq += response.data.size
+                if (response.data.size < 100) break
+            }
+            if (serverWords.isEmpty()) return@withContext 0
+
+            // 2) Update local known words
+            val knownWords = knownDao.getAll()
+            for (kw in knownWords) {
+                val sw = serverWords[kw.wordId] ?: continue
+                knownDao.updateFromServer(
+                    kw.id, sw.pronunciation, sw.repeatVoice,
+                    sw.phonetic, sw.translation, gson.toJson(sw.etymology),
+                    gson.toJson(sw.etymologyPhonetic), gson.toJson(sw.etymologyPronunciation),
+                    sw.plural, sw.thirdPersonSingular, sw.presentParticiple, sw.pastTense,
+                    sw.categoryName, sw.remark
+                )
+                updated++
+            }
+
+            // 3) Update local unknown words
+            val unknownWords = unknownDao.getAll()
+            for (uw in unknownWords) {
+                val sw = serverWords[uw.wordId] ?: continue
+                unknownDao.updateFromServer(
+                    uw.id, sw.pronunciation, sw.repeatVoice,
+                    sw.phonetic, sw.translation, gson.toJson(sw.etymology),
+                    gson.toJson(sw.etymologyPhonetic), gson.toJson(sw.etymologyPronunciation),
+                    sw.plural, sw.thirdPersonSingular, sw.presentParticiple, sw.pastTense,
+                    sw.categoryName, sw.remark
+                )
+                updated++
             }
         } catch (_: Exception) { }
-        fetched
+        updated
     }
 
     private fun ApiWord.toKnownWord() = KnownWord(

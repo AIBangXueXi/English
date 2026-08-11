@@ -26,8 +26,11 @@ import com.example.english.data.WordViewModel
 import com.example.english.data.update.UpdateInfo
 import com.example.english.data.update.UpdateManager
 import com.example.english.speech.SpeechService
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.english.ui.screen.HomeScreen
 import com.example.english.ui.screen.LibraryManagementScreen
+import com.example.english.ui.screen.MoErScreen
+import com.example.english.ui.screen.MoErWord
 import com.example.english.ui.screen.WordScreen
 import com.example.english.ui.theme.EnglishTheme
 import kotlinx.coroutines.Dispatchers
@@ -58,8 +61,6 @@ class MainActivity : ComponentActivity() {
                 var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
                 var isCheckingUpdate by remember { mutableStateOf(false) }
                 var isSyncing by remember { mutableStateOf(false) }
-                var isMoErPlaying by remember { mutableStateOf(false) }
-                var moErCurrentWord by remember { mutableStateOf("") }
                 var knownCount by remember { mutableStateOf(0) }
                 var unknownCount by remember { mutableStateOf(0) }
                 val scope = rememberCoroutineScope()
@@ -92,56 +93,7 @@ class MainActivity : ComponentActivity() {
                 }
 
                 val onMoEr: () -> Unit = {
-                    scope.launch {
-                        if (isMoErPlaying) {
-                            isMoErPlaying = false
-                            return@launch
-                        }
-                        isMoErPlaying = true
-                        val urls = syncViewModel.getMoErWords()
-                        if (urls.isEmpty()) {
-                            isMoErPlaying = false
-                            Toast.makeText(
-                                this@MainActivity,
-                                "没有可播放的磨耳音频，请先同步数据",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                            return@launch
-                        }
-                        withContext(Dispatchers.IO) {
-                            var i = 0
-                            while (isMoErPlaying && i < urls.size) {
-                                moErCurrentWord = "播放中 (${i + 1}/${urls.size})"
-                                try {
-                                    val mp = MediaPlayer().apply {
-                                        setAudioAttributes(
-                                            AudioAttributes.Builder()
-                                                .setUsage(AudioAttributes.USAGE_MEDIA)
-                                                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                                                .build()
-                                        )
-                                        setDataSource(urls[i])
-                                        setOnCompletionListener { it.release() }
-                                        setOnErrorListener { m, _, _ -> m.release(); true }
-                                        prepare()
-                                        start()
-                                    }
-                                    while (isMoErPlaying && mp.isPlaying) {
-                                        delay(500)
-                                    }
-                                    try { mp.release() } catch (_: Exception) {}
-                                } catch (_: Exception) { }
-                                i++
-                                // Gap between words
-                                if (isMoErPlaying && i < urls.size) delay(2000)
-                            }
-                        }
-                        isMoErPlaying = false
-                        moErCurrentWord = ""
-                        if (urls.isNotEmpty()) {
-                            Toast.makeText(this@MainActivity, "磨耳播放完成", Toast.LENGTH_SHORT).show()
-                        }
-                    }
+                    currentScreen = Screen.MoErPage
                 }
 
                 val checkForUpdates: () -> Unit = {
@@ -242,6 +194,18 @@ class MainActivity : ComponentActivity() {
                             isSyncing = isSyncing
                         )
                     }
+                    is Screen.MoErPage -> {
+                        val moerViewModel: WordViewModel = viewModel()
+                        LaunchedEffect(Unit) { moerViewModel.refreshLibrary() }
+                        val moerWords by moerViewModel.libraryUnknownWords.collectAsStateWithLifecycle()
+                        val words = moerWords.map {
+                            MoErWord(it.word, it.meaning, it.repeatVoice)
+                        }
+                        MoErScreen(
+                            words = words,
+                            onBack = { currentScreen = Screen.Home }
+                        )
+                    }
                 }
             }
         }
@@ -262,4 +226,5 @@ sealed class Screen {
     data object Home : Screen()
     data object WordPage : Screen()
     data object LibraryManagement : Screen()
+    data object MoErPage : Screen()
 }

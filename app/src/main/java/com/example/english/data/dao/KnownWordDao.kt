@@ -22,4 +22,17 @@ interface KnownWordDao {
 
     @Query("UPDATE known_words SET repeatVoice = :repeatVoice WHERE wordId = :wordId")
     suspend fun updateRepeatVoice(wordId: String, repeatVoice: String)
+
+    @Query("""UPDATE known_words SET
+        pronunciation = :pron, repeatVoice = :repeatVoice, phonetic = :phonetic,
+        meaning = :meaning, etymologyJson = :etym, etymologyPhoneticJson = :etymPh,
+        etymologyPronunciationJson = :etymPron, plural = :plural,
+        thirdPersonSingular = :third, presentParticiple = :presp, pastTense = :past,
+        categoryName = :cat, remark = :remark
+        WHERE id = :id""")
+    suspend fun updateFromServer(
+        id: Long, pron: String, repeatVoice: String, phonetic: String, meaning: String,
+        etym: String, etymPh: String, etymPron: String, plural: String,
+        third: String, presp: String, past: String, cat: String, remark: String
+    )
 }
