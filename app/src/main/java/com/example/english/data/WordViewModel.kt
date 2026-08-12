@@ -147,6 +147,17 @@ class WordViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun resetAll(onDone: () -> Unit = {}) {
+        viewModelScope.launch {
+            repository.resetAll()
+            pendingApiWords = emptyList()
+            currentApiIndex = 0
+            currentUnknownWord = null
+            refreshLibrary()
+            onDone()
+        }
+    }
+
     /** Load the full contents of both local library tables. */
     fun refreshLibrary() {
         viewModelScope.launch {

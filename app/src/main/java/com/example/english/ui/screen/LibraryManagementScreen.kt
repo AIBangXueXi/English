@@ -21,6 +21,7 @@ import androidx.compose.material.icons.rounded.Clear
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.DeleteForever
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Sync
@@ -82,13 +83,15 @@ fun LibraryManagementScreen(
     viewModel: WordViewModel,
     onBack: () -> Unit,
     onSync: () -> Unit = {},
-    isSyncing: Boolean = false
+    isSyncing: Boolean = false,
+    onReset: () -> Unit = {}
 ) {
     val knownWords by viewModel.libraryKnownWords.collectAsStateWithLifecycle()
     val unknownWords by viewModel.libraryUnknownWords.collectAsStateWithLifecycle()
     var pendingDelete by remember { mutableStateOf<PendingDelete?>(null) }
     var knownExpanded by remember { mutableStateOf(false) }
     var unknownExpanded by remember { mutableStateOf(false) }
+    var showResetDialog by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
 
     val filteredKnown = remember(knownWords, searchQuery) {
@@ -149,6 +152,13 @@ fun LibraryManagementScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { showResetDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Rounded.DeleteForever,
+                            contentDescription = "重置",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
                     IconButton(onClick = onSync, enabled = !isSyncing) {
                         Icon(
                             imageVector = Icons.Rounded.Sync,
@@ -281,6 +291,29 @@ fun LibraryManagementScreen(
                 }
             }
         }
+    }
+
+    if (showResetDialog) {
+        AlertDialog(
+            onDismissRequest = { showResetDialog = false },
+            title = { Text("确认重置", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error) },
+            text = { Text("将删除所有已学习的单词记录和当前学习进度，此操作不可恢复！") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showResetDialog = false
+                        onReset()
+                    }
+                ) {
+                    Text("确认重置", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetDialog = false }) {
+                    Text("取消")
+                }
+            }
+        )
     }
 
     if (pendingDelete != null) {

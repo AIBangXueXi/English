@@ -44,4 +44,7 @@ interface UnknownWordDao {
         etym: String, etymPh: String, etymPron: String, plural: String,
         third: String, presp: String, past: String, cat: String, remark: String
     )
+
+    @Query("DELETE FROM unknown_words")
+    suspend fun deleteAll()
 }

@@ -191,7 +191,20 @@ class MainActivity : ComponentActivity() {
                             viewModel = libraryViewModel,
                             onBack = { currentScreen = Screen.Home },
                             onSync = onSync,
-                            isSyncing = isSyncing
+                            isSyncing = isSyncing,
+                            onReset = {
+                                libraryViewModel.resetAll {
+                                    Toast.makeText(
+                                        this@MainActivity,
+                                        "已重置所有学习记录",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                    scope.launch {
+                                        knownCount = 0
+                                        unknownCount = 0
+                                    }
+                                }
+                            }
                         )
                     }
                     is Screen.MoErPage -> {

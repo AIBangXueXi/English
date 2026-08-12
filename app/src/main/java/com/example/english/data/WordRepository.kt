@@ -93,6 +93,12 @@ class WordRepository(context: Context) {
         updateStoredSeq(1)
     }
 
+    suspend fun resetAll() = withContext(Dispatchers.IO) {
+        knownDao.deleteAll()
+        unknownDao.deleteAll()
+        updateStoredSeq(1)
+    }
+
     // Ebbinghaus intervals in millis: 1d, 2d, 4d, 7d
     // (15min and 1h stages removed)
     private val ebbinghausIntervals = longArrayOf(
