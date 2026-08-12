@@ -163,6 +163,7 @@ fun WordScreen(
     var manualResult by remember { mutableStateOf<String?>(null) }
     var meaningPassed by remember { mutableStateOf(false) }
     var spellingPassed by remember { mutableStateOf(false) }
+    var committed by remember { mutableStateOf(false) }
     var gaveUp by remember { mutableStateOf(false) }
     var spellingInput by remember { mutableStateOf("") }
     var spellingResult by remember { mutableStateOf<String?>(null) }
@@ -204,6 +205,7 @@ fun WordScreen(
         manualResult = null
         meaningPassed = false
         spellingPassed = false
+        committed = false
         gaveUp = false
         spellingInput = ""
         spellingResult = null
@@ -219,6 +221,10 @@ fun WordScreen(
                 spellingPassed = true
                 showCelebration = true
                 spellingResult = null
+                if (!committed) {
+                    committed = true
+                    viewModel.onCorrectAnswer()
+                }
             }
         }
     }
@@ -830,6 +836,10 @@ fun WordScreen(
                                         onClick = {
                                             gaveUp = true
                                             revealed = true
+                                            if (!committed) {
+                                                committed = true
+                                                viewModel.onWrongAnswer()
+                                            }
                                         },
                                         modifier = Modifier.weight(1f).height(52.dp),
                                         shape = RoundedCornerShape(14.dp),
@@ -885,6 +895,10 @@ fun WordScreen(
                                         spellingPassed = true
                                         showCelebration = true
                                         spellingResult = null
+                                        if (!committed) {
+                                            committed = true
+                                            viewModel.onCorrectAnswer()
+                                        }
                                     } else {
                                         spellingResult = "拼写有误，再试试"
                                     }
@@ -986,6 +1000,10 @@ fun WordScreen(
                                         onClick = {
                                             gaveUp = true
                                             revealed = true
+                                            if (!committed) {
+                                                committed = true
+                                                viewModel.onWrongAnswer()
+                                            }
                                         },
                                         modifier = Modifier.weight(1f).height(52.dp),
                                         shape = RoundedCornerShape(14.dp),
@@ -1020,8 +1038,6 @@ fun WordScreen(
                             ) {
                                 Button(
                                     onClick = {
-                                        val known = meaningPassed && spellingPassed && !gaveUp
-                                        if (known) viewModel.onCorrectAnswer() else viewModel.onWrongAnswer()
                                         viewModel.loadNextWord()
                                     },
                                     modifier = Modifier
