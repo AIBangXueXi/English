@@ -6,6 +6,7 @@ import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
 import android.media.MediaPlayer
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
@@ -168,7 +169,6 @@ fun WordScreen(
     var isAiChecking by remember { mutableStateOf(false) }
     var isPlayingPronunciation by remember { mutableStateOf(false) }
     var pronunciationJob by remember { mutableStateOf<Job?>(null) }
-    var pronunciationPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scope = rememberCoroutineScope()
@@ -209,8 +209,6 @@ fun WordScreen(
         spellingResult = null
         isPlayingPronunciation = false
         isAiChecking = false
-        pronunciationPlayer?.release()
-        pronunciationPlayer = null
     }
 
     // 默写完成自动确认：拼写完全正确即自动标记通过（无需点“确认”）
@@ -236,7 +234,6 @@ fun WordScreen(
         onDispose {
             playJob?.cancel()
             pronunciationJob?.cancel()
-            pronunciationPlayer?.release()
         }
     }
 
@@ -496,18 +493,12 @@ fun WordScreen(
                                             }
                                             if (isPlayingPronunciation) {
                                                 pronunciationJob?.cancel()
-                                                pronunciationPlayer?.apply {
-                                                    try { stop() } catch (_: Exception) {}
-                                                    release()
-                                                }
-                                                pronunciationPlayer = null
                                                 isPlayingPronunciation = false
                                             } else {
                                                 isPlayingPronunciation = true
                                                 pronunciationJob = scope.launch {
-                                                    val success = playPronunciation(context, word.pronunciation)
+                                                    playPronunciation(context, word.pronunciation)
                                                     isPlayingPronunciation = false
-                                                    pronunciationPlayer = null
                                                 }
                                             }
                                         },
@@ -1112,15 +1103,10 @@ private fun EtymologyBreakdown(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     var playingIndex by remember { mutableStateOf<Int?>(null) }
-    var syllablePlayer by remember { mutableStateOf<MediaPlayer?>(null) }
     var syllableJob by remember { mutableStateOf<Job?>(null) }
 
     DisposableEffect(Unit) {
-        onDispose {
-            syllableJob?.cancel()
-            syllablePlayer?.apply { try { stop() } catch (_: Exception) {}; release() }
-            syllablePlayer = null
-        }
+        onDispose { syllableJob?.cancel() }
     }
 
     Row(
@@ -1149,57 +1135,63 @@ private fun EtymologyBreakdown(
                                 onClick = {
                                     if (playingIndex == index) {
                                         syllableJob?.cancel()
-                                        syllablePlayer?.apply { try { stop() } catch (_: Exception) {}; release() }
-                                        syllablePlayer = null
                                         playingIndex = null
                                     } else {
                                         syllableJob?.cancel()
-                                        syllablePlayer?.apply { try { stop() } catch (_: Exception) {}; release() }
-                                        syllablePlayer = null
                                         playingIndex = index
                                         syllableJob = scope.launch(Dispatchers.IO) {
                                             try {
+                                                Log.d("EnglishApp", "Syllable play: index=$index text=${syllable.text} url=$pronUrl")
                                                 val mp = if (pronUrl.startsWith("raw:", ignoreCase = true)) {
                                                     val resId = resolveRawResId(context, pronUrl)
                                                     if (resId != 0) MediaPlayer.create(context, resId) else null
                                                 } else {
-                                                    MediaPlayer().apply {
-                                                        setAudioAttributes(
-                                                            AudioAttributes.Builder()
-                                                                .setUsage(AudioAttributes.USAGE_MEDIA)
-                                                                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                                                                .build()
-                                                        )
-                                                        setDataSource(pronUrl)
-                                                        setOnCompletionListener { m ->
-                                                            m.release()
-                                                            playingIndex = null
-                                                            syllablePlayer = null
+                                                    val tempFile = java.io.File(context.cacheDir, "syl_${System.currentTimeMillis()}.wav")
+                                                    try {
+                                                        val conn = java.net.URL(pronUrl).openConnection() as java.net.HttpURLConnection
+                                                        conn.setRequestProperty("User-Agent", "EnglishApp")
+                                                        conn.connectTimeout = 10000
+                                                        conn.readTimeout = 10000
+                                                        conn.connect()
+                                                        if (conn.responseCode == 200) {
+                                                            conn.inputStream.use { input ->
+                                                                tempFile.outputStream().use { output -> input.copyTo(output) }
+                                                            }
+                                                        } else { conn.disconnect(); null }
+                                                        conn.disconnect()
+                                                    } catch (e: Exception) { null }
+                                                    if (tempFile.exists() && tempFile.length() > 44) {
+                                                        MediaPlayer().apply {
+                                                            setAudioAttributes(
+                                                                AudioAttributes.Builder()
+                                                                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                                                                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                                                                    .build()
+                                                            )
+                                                            setDataSource(tempFile.absolutePath)
+                                                            setOnCompletionListener {
+                                                                it.release()
+                                                                tempFile.delete()
+                                                            }
+                                                            setOnErrorListener { m, _, _ ->
+                                                                m.release()
+                                                                tempFile.delete()
+                                                                true
+                                                            }
+                                                            prepare()
+                                                            start()
                                                         }
-                                                        setOnErrorListener { m, _, _ ->
-                                                            m.release()
-                                                            playingIndex = null
-                                                            syllablePlayer = null
-                                                            true
-                                                        }
-                                                        prepare()
-                                                        start()
-                                                    }
+                                                    } else null
                                                 }
-                                                if (mp == null) {
-                                                    syllablePlayer = null
-                                                    playingIndex = null
-                                                } else {
+                                                if (mp != null) {
                                                     if (pronUrl.startsWith("raw:", ignoreCase = true)) mp.start()
-                                                    syllablePlayer = mp
-                                                    while (isActive && mp.isPlaying) {
-                                                        delay(200)
-                                                    }
+                                                    while (isActive && mp.isPlaying) { delay(300) }
+                                                    try { mp.release() } catch (_: Exception) {}
                                                 }
-                                            } catch (_: Exception) {
-                                                syllablePlayer = null
-                                                playingIndex = null
+                                            } catch (e: Exception) {
+                                                Log.e("EnglishApp", "Syllable play failed: url=$pronUrl", e)
                                             }
+                                            playingIndex = null
                                         }
                                     }
                                 },
@@ -1472,11 +1464,33 @@ private fun playErrorSound(context: Context) {
  */
 private suspend fun playPronunciation(context: Context, source: String): Boolean = withContext(Dispatchers.IO) {
     try {
+        Log.d("EnglishApp", "playPronunciation: source=$source")
         val mp = if (source.startsWith("raw:", ignoreCase = true)) {
             val resId = resolveRawResId(context, source)
             if (resId == 0) return@withContext false
             MediaPlayer.create(context, resId) ?: return@withContext false
         } else {
+            // Download to temp file first to avoid HTTPS issues on some devices (e.g. OPPO)
+            val tempFile = java.io.File(context.cacheDir, "pron_${System.currentTimeMillis()}.wav")
+            try {
+                val conn = java.net.URL(source).openConnection() as java.net.HttpURLConnection
+                conn.setRequestProperty("User-Agent", "EnglishApp")
+                conn.connectTimeout = 10000
+                conn.readTimeout = 10000
+                conn.connect()
+                if (conn.responseCode == 200) {
+                    conn.inputStream.use { input ->
+                        tempFile.outputStream().use { output -> input.copyTo(output) }
+                    }
+                } else {
+                    Log.e("EnglishApp", "Download failed: HTTP ${conn.responseCode}")
+                    return@withContext false
+                }
+                conn.disconnect()
+            } catch (e: Exception) {
+                Log.e("EnglishApp", "Download failed", e)
+                return@withContext false
+            }
             MediaPlayer().apply {
                 setAudioAttributes(
                     AudioAttributes.Builder()
@@ -1484,24 +1498,30 @@ private suspend fun playPronunciation(context: Context, source: String): Boolean
                         .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                         .build()
                 )
-                setDataSource(source)
+                setDataSource(tempFile.absolutePath)
+                setOnCompletionListener {
+                    it.release()
+                    tempFile.delete()
+                }
+                setOnErrorListener { m, _, _ ->
+                    m.release()
+                    tempFile.delete()
+                    true
+                }
+                prepare()
+                start()
             }
         }
-        mp.setOnCompletionListener { mp -> mp.release() }
-        mp.setOnErrorListener { mp, _, _ -> mp.release(); true }
         if (source.startsWith("raw:", ignoreCase = true)) {
-            // MediaPlayer.create() already prepares the resource.
-            mp.start()
-        } else {
-            mp.prepare()
+            mp.setOnCompletionListener { it.release() }
+            mp.setOnErrorListener { m, _, _ -> m.release(); true }
             mp.start()
         }
-        // Wait for playback to complete or be cancelled
-        while (isActive && mp.isPlaying) {
-            delay(200)
-        }
+        while (isActive && mp.isPlaying) { delay(300) }
+        try { mp.release() } catch (_: Exception) {}
         true
     } catch (e: Exception) {
+        Log.e("EnglishApp", "playPronunciation failed: source=$source", e)
         false
     }
 }

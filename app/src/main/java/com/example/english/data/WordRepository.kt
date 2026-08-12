@@ -1,6 +1,8 @@
 package com.example.english.data
 
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.MediaPlayer
 import com.example.english.data.api.ApiWord
 import com.example.english.data.api.WordApiService
 import com.example.english.data.entity.KnownWord
@@ -45,6 +47,57 @@ fun resolveRawResId(context: Context, source: String): Int {
     if (name.isEmpty()) return 0
     return context.resources.getIdentifier(name, "raw", context.packageName)
 }
+
+/**
+ * Download a remote audio URL to a local temp file, then create a MediaPlayer
+ * from the local file. This avoids HTTPS/MediaPlayer compatibility issues on
+ * some devices (e.g. OPPO) that fail to stream directly from setDataSource(url).
+ */
+suspend fun createPlayerFromUrl(context: Context, url: String): MediaPlayer? =
+    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val tempFile = java.io.File(context.cacheDir, "audio_${System.currentTimeMillis()}.wav")
+        try {
+            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            conn.setRequestProperty("User-Agent", "EnglishApp")
+            conn.connectTimeout = 10_000
+            conn.readTimeout = 10_000
+            conn.connect()
+            if (conn.responseCode != 200) {
+                conn.disconnect()
+                return@withContext null
+            }
+            conn.inputStream.use { input ->
+                tempFile.outputStream().use { output -> input.copyTo(output) }
+            }
+            conn.disconnect()
+        } catch (_: Exception) {
+            return@withContext null
+        }
+        if (!tempFile.exists() || tempFile.length() < 44) {
+            tempFile.delete()
+            return@withContext null
+        }
+        android.media.MediaPlayer().apply {
+            setAudioAttributes(
+                android.media.AudioAttributes.Builder()
+                    .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build()
+            )
+            setDataSource(tempFile.absolutePath)
+            setOnCompletionListener {
+                it.release()
+                tempFile.delete()
+            }
+            setOnErrorListener { m, _, _ ->
+                m.release()
+                tempFile.delete()
+                true
+            }
+            prepare()
+            start()
+        }
+    }
 
 class WordRepository(context: Context) {
     private val db = AppDatabase.getInstance(context)

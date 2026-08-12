@@ -52,10 +52,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.content.Context
+import com.example.english.data.createPlayerFromUrl
 import com.example.english.data.resolveStaticUrl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -76,6 +79,7 @@ fun MoErScreen(
     words: List<MoErWord>,
     onBack: () -> Unit
 ) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var isPlaying by remember { mutableStateOf(false) }
     var currentIndex by remember { mutableIntStateOf(0) }
@@ -116,27 +120,12 @@ fun MoErScreen(
                 val url = resolveStaticUrl(word.repeatVoice)
                 if (url.isNotEmpty()) {
                     currentIndex = i
-                    try {
-                        withContext(Dispatchers.IO) {
-                            val mp = MediaPlayer().apply {
-                                setAudioAttributes(
-                                    AudioAttributes.Builder()
-                                        .setUsage(AudioAttributes.USAGE_MEDIA)
-                                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                                        .build()
-                                )
-                                setDataSource(url)
-                                setOnCompletionListener { it.release() }
-                                setOnErrorListener { m, _, _ -> m.release(); true }
-                                prepare()
-                                start()
-                            }
-                            while (isActive && isPlaying && mp.isPlaying) {
-                                delay(300)
-                            }
-                            try { mp.release() } catch (_: Exception) {}
+                    val mp = createPlayerFromUrl(context, url)
+                    if (mp != null) {
+                        while (isActive && isPlaying && mp.isPlaying) {
+                            delay(300)
                         }
-                    } catch (_: Exception) {}
+                    }
                     played++
                     if (isPlaying) delay(2000)
                 }

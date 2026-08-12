@@ -52,6 +52,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -60,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.english.data.WordViewModel
+import com.example.english.data.createPlayerFromUrl
 import com.example.english.data.entity.KnownWord
 import com.example.english.data.entity.UnknownWord
 import com.example.english.data.resolveStaticUrl
@@ -91,6 +93,7 @@ fun LibraryManagementScreen(
     var pendingDelete by remember { mutableStateOf<PendingDelete?>(null) }
     var knownExpanded by remember { mutableStateOf(false) }
     var unknownExpanded by remember { mutableStateOf(false) }
+    val context = LocalContext.current
     var showResetDialog by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
 
@@ -111,27 +114,14 @@ fun LibraryManagementScreen(
     val playPronunciation: (String) -> Unit = { source ->
         val url = resolveStaticUrl(source)
         if (url.isNotEmpty()) {
-        scope.launch {
-            withContext(Dispatchers.IO) {
-                try {
-                    val mp = android.media.MediaPlayer().apply {
-                        setAudioAttributes(
-                            AudioAttributes.Builder()
-                                .setUsage(AudioAttributes.USAGE_MEDIA)
-                                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                                .build()
-                        )
-                        setDataSource(url)
-                        setOnCompletionListener { it.release() }
-                        setOnErrorListener { m, _, _ -> m.release(); true }
-                        prepare()
-                        start()
+            scope.launch {
+                val mp = createPlayerFromUrl(context, url)
+                if (mp != null) {
+                    while (isActive && mp.isPlaying) {
+                        delay(300)
                     }
-                    while (isActive && mp.isPlaying) { delay(200) }
-                    try { mp.release() } catch (_: Exception) {}
-                } catch (_: Exception) { }
+                }
             }
-        }
         }
     }
 
