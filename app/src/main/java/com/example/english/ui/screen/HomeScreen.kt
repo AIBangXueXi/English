@@ -12,7 +12,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
@@ -116,10 +118,11 @@ fun HomeScreen(
                 }
             }
 
-            // Body
+            // Body (scrollable)
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
                     .padding(horizontal = 20.dp)
                     .padding(top = 28.dp)
             ) {
@@ -218,7 +221,7 @@ fun HomeScreen(
                     module2 = ModuleItem("读短文", "阅读英文原版短篇", Icons.AutoMirrored.Rounded.MenuBook, onReadClick),
                 )
 
-                Spacer(modifier = Modifier.weight(1f))
+                Spacer(modifier = Modifier.height(32.dp))
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
