@@ -167,6 +167,7 @@ fun WordScreen(
     var gaveUp by remember { mutableStateOf(false) }
     var spellingInput by remember { mutableStateOf("") }
     var spellingResult by remember { mutableStateOf<String?>(null) }
+    var waitingForDictation by remember { mutableStateOf(false) }
     var isAiChecking by remember { mutableStateOf(false) }
     var isPlayingPronunciation by remember { mutableStateOf(false) }
     var pronunciationJob by remember { mutableStateOf<Job?>(null) }
@@ -189,7 +190,7 @@ fun WordScreen(
     }
 
     val currentWord = (quizState as? QuizState.Active)?.word
-    val isDictation = meaningPassed && !spellingPassed && !gaveUp
+    val isDictation = meaningPassed && !spellingPassed && !gaveUp && !waitingForDictation
     LaunchedEffect(currentWord) {
         revealed = false
         isRecording = false
@@ -209,6 +210,7 @@ fun WordScreen(
         gaveUp = false
         spellingInput = ""
         spellingResult = null
+        waitingForDictation = false
         isPlayingPronunciation = false
         isAiChecking = false
     }
@@ -274,6 +276,8 @@ fun WordScreen(
                     if (word.meaning.trim().contains(text.trim())) {
                         meaningPassed = true
                         revealed = true
+                        showCelebration = true
+                        waitingForDictation = true
                     } else {
                         isAiChecking = true
                         val aiMatch = DeepSeekService.compareMeaning(
@@ -283,6 +287,8 @@ fun WordScreen(
                         if (aiMatch) {
                             meaningPassed = true
                             revealed = true
+                            showCelebration = true
+                            waitingForDictation = true
                         } else {
                             showRetryHint = true
                             playErrorSound(context)
@@ -764,8 +770,27 @@ fun WordScreen(
                         Spacer(modifier = Modifier.height(140.dp))
                     }
 
-                    // Fixed bottom action area — staged: 说意思 → 默写 → 下一个
+                    // Fixed bottom action area — staged: 说意思 → (答对提示) → 默写 → 下一个
                     when {
+                        meaningPassed && waitingForDictation -> {
+                            // 答对提示播放中：等庆祝动画/提示音结束后再进入默写
+                            Column(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .fillMaxWidth()
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "即将进入默写…",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+
                         !meaningPassed && !gaveUp -> {
                             // Stage 1: 说意思
                             Column(
@@ -798,6 +823,8 @@ fun WordScreen(
                                                     meaningPassed = true
                                                     revealed = true
                                                     manualResult = null
+                                                    showCelebration = true
+                                                    waitingForDictation = true
                                                 } else {
                                                     scope.launch {
                                                         isAiChecking = true
@@ -809,6 +836,8 @@ fun WordScreen(
                                                             meaningPassed = true
                                                             revealed = true
                                                             manualResult = null
+                                                            showCelebration = true
+                                                            waitingForDictation = true
                                                         } else {
                                                             manualResult = "意思不正确，再试试"
                                                         playErrorSound(context)
@@ -1071,7 +1100,10 @@ fun WordScreen(
                         ) {
                             CelebrationBanner(
                                 visible = showCelebration,
-                                onFinished = { showCelebration = false }
+                                onFinished = {
+                                    showCelebration = false
+                                    waitingForDictation = false
+                                }
                             )
                         }
 
