@@ -19,10 +19,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Bookmarks
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FormatQuote
 import androidx.compose.material.icons.rounded.Headphones
+import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.School
+import androidx.compose.material.icons.rounded.Translate
 import androidx.compose.material.icons.rounded.TrendingUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -55,6 +58,9 @@ fun HomeScreen(
     onReadClick: () -> Unit = {},
     onDictionaryClick: () -> Unit = {},
     onMoErClick: () -> Unit = {},
+    onDictationClick: () -> Unit = {},
+    onPronunciationClick: () -> Unit = {},
+    onMeaningClick: () -> Unit = {},
     onCheckUpdate: () -> Unit = {},
     isCheckingUpdate: Boolean = false,
     knownCount: Int = 0,
@@ -219,6 +225,27 @@ fun HomeScreen(
                 ModuleRow(
                     module1 = ModuleItem("本地词库", "管理你的专属词汇", Icons.Rounded.Bookmarks, onDictionaryClick),
                     module2 = ModuleItem("读短文", "阅读英文原版短篇", Icons.AutoMirrored.Rounded.MenuBook, onReadClick),
+                )
+
+                Spacer(modifier = Modifier.height(28.dp))
+
+                Text(
+                    text = "训练专区",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 0.5.sp
+                    ),
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                ModuleRow(
+                    module1 = ModuleItem("默写单词", "看意思，拼写单词", Icons.Rounded.Edit, onDictationClick),
+                    module2 = ModuleItem("发音训练", "看单词，跟读发音", Icons.Rounded.Mic, onPronunciationClick),
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                ModuleCard(
+                    item = ModuleItem("单词意思", "看单词，说出意思", Icons.Rounded.Translate, onMeaningClick),
+                    modifier = Modifier.fillMaxWidth()
                 )
 
                 Spacer(modifier = Modifier.height(32.dp))

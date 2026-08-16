@@ -13,6 +13,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -31,6 +32,9 @@ import com.example.english.ui.screen.HomeScreen
 import com.example.english.ui.screen.LibraryManagementScreen
 import com.example.english.ui.screen.MoErScreen
 import com.example.english.ui.screen.MoErWord
+import com.example.english.ui.screen.TrainingMode
+import com.example.english.ui.screen.TrainingScreen
+import com.example.english.ui.screen.Word
 import com.example.english.ui.screen.WordScreen
 import com.example.english.ui.theme.EnglishTheme
 import kotlinx.coroutines.Dispatchers
@@ -172,6 +176,19 @@ class MainActivity : ComponentActivity() {
                             currentScreen = Screen.LibraryManagement
                         },
                         onMoErClick = onMoEr,
+                        onDictationClick = {
+                            currentScreen = Screen.DictationPage
+                        },
+                        onPronunciationClick = {
+                            ensureAudioPermission {
+                                currentScreen = Screen.PronunciationPage
+                            }
+                        },
+                        onMeaningClick = {
+                            ensureAudioPermission {
+                                currentScreen = Screen.MeaningPage
+                            }
+                        },
                         onCheckUpdate = checkForUpdates,
                         isCheckingUpdate = isCheckingUpdate,
                         knownCount = knownCount,
@@ -219,6 +236,21 @@ class MainActivity : ComponentActivity() {
                             onBack = { currentScreen = Screen.Home }
                         )
                     }
+                    is Screen.DictationPage -> TrainingPage(
+                        mode = TrainingMode.Dictation,
+                        speechService = speechService,
+                        onBack = { currentScreen = Screen.Home }
+                    )
+                    is Screen.PronunciationPage -> TrainingPage(
+                        mode = TrainingMode.Pronunciation,
+                        speechService = speechService,
+                        onBack = { currentScreen = Screen.Home }
+                    )
+                    is Screen.MeaningPage -> TrainingPage(
+                        mode = TrainingMode.Meaning,
+                        speechService = speechService,
+                        onBack = { currentScreen = Screen.Home }
+                    )
                 }
             }
         }
@@ -240,4 +272,24 @@ sealed class Screen {
     data object WordPage : Screen()
     data object LibraryManagement : Screen()
     data object MoErPage : Screen()
+    data object DictationPage : Screen()
+    data object PronunciationPage : Screen()
+    data object MeaningPage : Screen()
+}
+
+@Composable
+private fun TrainingPage(
+    mode: TrainingMode,
+    speechService: SpeechService,
+    onBack: () -> Unit
+) {
+    val trainingViewModel: WordViewModel = viewModel()
+    var trainingWords by remember { mutableStateOf<List<Word>>(emptyList()) }
+    LaunchedEffect(Unit) { trainingWords = trainingViewModel.getTrainingWords() }
+    TrainingScreen(
+        mode = mode,
+        words = trainingWords,
+        speechService = speechService,
+        onBack = onBack
+    )
 }

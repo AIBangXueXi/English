@@ -196,6 +196,14 @@ class WordViewModel(application: Application) : AndroidViewModel(application) {
             .map { resolveStaticUrl(it.repeatVoice) }
     }
 
+    /**
+     * Get the word pool for standalone training modes (默写/发音/意思):
+     * only unknown words (不认识) from the local library.
+     */
+    suspend fun getTrainingWords(): List<Word> {
+        return repository.getUnknownWords().map { it.toWord() }
+    }
+
     private fun ApiWord.toWord() = Word(
         word = word,
         phonetic = phonetic,
@@ -214,6 +222,23 @@ class WordViewModel(application: Application) : AndroidViewModel(application) {
     )
 
     private fun UnknownWord.toWord() = Word(
+        word = word,
+        phonetic = phonetic,
+        meaning = meaning,
+        pronunciation = resolveStaticUrl(pronunciation),
+        etymology = fromJsonList(etymologyJson),
+        etymologyPhonetic = fromJsonList(etymologyPhoneticJson),
+        etymologyPronunciation = fromJsonList(etymologyPronunciationJson).map { resolveAudioSource(it) },
+        plural = plural,
+        thirdPersonSingular = thirdPersonSingular,
+        presentParticiple = presentParticiple,
+        pastTense = pastTense,
+        categoryName = categoryName,
+        remark = remark,
+        repeatVoice = resolveStaticUrl(repeatVoice)
+    )
+
+    private fun KnownWord.toWord() = Word(
         word = word,
         phonetic = phonetic,
         meaning = meaning,

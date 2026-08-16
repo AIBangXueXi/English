@@ -1271,7 +1271,7 @@ private fun EtymologyBreakdown(
 }
 
 @Composable
-private fun CelebrationBanner(visible: Boolean, onFinished: () -> Unit) {
+internal fun CelebrationBanner(visible: Boolean, onFinished: () -> Unit) {
     val starColors = listOf(
         Color(0xFFFFD700), Color(0xFFFF6B6B), Color(0xFF4FC3F7),
         Color(0xFF81C784), Color(0xFFFFB74D), Color(0xFFBA68C8)
@@ -1357,7 +1357,7 @@ private fun CelebrationBanner(visible: Boolean, onFinished: () -> Unit) {
 }
 
 @Composable
-private fun RetryBanner(visible: Boolean, onFinished: () -> Unit) {
+internal fun RetryBanner(visible: Boolean, onFinished: () -> Unit) {
     val shakeOffset = remember { Animatable(0f) }
     val alpha by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
@@ -1410,7 +1410,7 @@ private fun RetryBanner(visible: Boolean, onFinished: () -> Unit) {
 }
 
 @Composable
-private fun PlayButton(hasData: Boolean, isPlaying: Boolean, onPlay: () -> Unit, onStop: () -> Unit) {
+internal fun PlayButton(hasData: Boolean, isPlaying: Boolean, onPlay: () -> Unit, onStop: () -> Unit) {
     TextButton(
         onClick = { if (isPlaying) onStop() else onPlay() },
         enabled = hasData
@@ -1474,7 +1474,7 @@ private suspend fun playPcm(pcmData: ByteArray?) = withContext(Dispatchers.IO) {
  * Play the bundled success feedback sound (res/raw/success.mp3) once.
  * One-shot: the MediaPlayer releases itself when playback finishes.
  */
-private fun playSuccessSound(context: Context) {
+internal fun playSuccessSound(context: Context) {
     try {
         val resId = resolveRawResId(context, "raw:success")
         if (resId == 0) return
@@ -1491,7 +1491,7 @@ private fun playSuccessSound(context: Context) {
  * Play the bundled error feedback sound (res/raw/error.mp3) once.
  * One-shot: the MediaPlayer releases itself when playback finishes.
  */
-private fun playErrorSound(context: Context) {
+internal fun playErrorSound(context: Context) {
     try {
         val resId = resolveRawResId(context, "raw:error")
         if (resId == 0) return
@@ -1510,7 +1510,7 @@ private fun playErrorSound(context: Context) {
  * - anything else    -> treated as a URL (online playback).
  * Returns true if playback started successfully.
  */
-private suspend fun playPronunciation(context: Context, source: String): Boolean = withContext(Dispatchers.IO) {
+internal suspend fun playPronunciation(context: Context, source: String): Boolean = withContext(Dispatchers.IO) {
     try {
         Log.d("EnglishApp", "playPronunciation: source=$source")
         val mp = if (source.startsWith("raw:", ignoreCase = true)) {
