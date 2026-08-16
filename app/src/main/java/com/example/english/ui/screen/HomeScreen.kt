@@ -25,12 +25,14 @@ import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.School
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Translate
 import androidx.compose.material.icons.rounded.TrendingUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.TextButton
@@ -61,6 +63,7 @@ fun HomeScreen(
     onDictationClick: () -> Unit = {},
     onPronunciationClick: () -> Unit = {},
     onMeaningClick: () -> Unit = {},
+    onSettingsClick: () -> Unit = {},
     onCheckUpdate: () -> Unit = {},
     isCheckingUpdate: Boolean = false,
     knownCount: Int = 0,
@@ -88,6 +91,16 @@ fun HomeScreen(
                     )
                     .padding(horizontal = 24.dp, vertical = 32.dp)
             ) {
+                IconButton(
+                    onClick = onSettingsClick,
+                    modifier = Modifier.align(Alignment.TopEnd)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Settings,
+                        contentDescription = "设置",
+                        tint = Color.White
+                    )
+                }
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Surface(

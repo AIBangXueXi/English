@@ -369,6 +369,33 @@ fun WordScreen(
                 }
             }
 
+            is QuizState.DailyComplete -> {
+                Box(
+                    modifier = Modifier.fillMaxSize().padding(innerPadding),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("🎯", style = MaterialTheme.typography.displayMedium)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            "今日学习任务已完成！",
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "今天发现的不认识单词已达目标，明天再来吧",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(32.dp))
+                        Button(onClick = onBack, shape = RoundedCornerShape(14.dp)) {
+                            Text("返回首页")
+                        }
+                    }
+                }
+            }
+
             is QuizState.Error -> {
                 Box(
                     modifier = Modifier.fillMaxSize().padding(innerPadding),

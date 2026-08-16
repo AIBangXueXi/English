@@ -23,6 +23,7 @@ sealed class QuizState {
         val stage: Int = 0
     ) : QuizState()
     data object Complete : QuizState()
+    data object DailyComplete : QuizState()
     data class Error(val message: String) : QuizState()
 }
 
@@ -53,6 +54,12 @@ class WordViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _state.value = QuizState.Loading
             try {
+                // 今日发现的不认识单词已达到上限 → 今日学习任务完成
+                if (repository.isDailyTaskDone()) {
+                    _state.value = QuizState.DailyComplete
+                    return@launch
+                }
+
                 unknownCount = repository.getUnknownCount()
                 knownCount = repository.getKnownCount()
 
@@ -129,6 +136,11 @@ class WordViewModel(application: Application) : AndroidViewModel(application) {
                     val apiWord = pendingApiWords.getOrNull(currentApiIndex) ?: return@launch
                     repository.addToUnknown(apiWord)
                     repository.advanceSeq(1)
+                    // 新词被标记为不认识：计入今日发现数，达到上限则今日任务完成
+                    if (repository.recordUnknownFoundAndCheckDone()) {
+                        _state.value = QuizState.DailyComplete
+                        return@launch
+                    }
                 }
                 currentApiIndex++
             } catch (e: Exception) {

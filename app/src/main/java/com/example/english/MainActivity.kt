@@ -2,15 +2,23 @@ package com.example.english
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.media.AudioAttributes
-import android.media.MediaPlayer
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.School
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -20,8 +28,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.english.data.DailyTaskStore
 import com.example.english.data.WordRepository
 import com.example.english.data.WordViewModel
 import com.example.english.data.update.UpdateInfo
@@ -29,18 +40,34 @@ import com.example.english.data.update.UpdateManager
 import com.example.english.speech.SpeechService
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.english.ui.screen.HomeScreen
+import com.example.english.ui.screen.HomeTabScreen
 import com.example.english.ui.screen.LibraryManagementScreen
 import com.example.english.ui.screen.MoErScreen
 import com.example.english.ui.screen.MoErWord
+import com.example.english.ui.screen.SettingsScreen
 import com.example.english.ui.screen.TrainingMode
 import com.example.english.ui.screen.TrainingScreen
 import com.example.english.ui.screen.Word
 import com.example.english.ui.screen.WordScreen
 import com.example.english.ui.theme.EnglishTheme
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+
+/** 底部 Tab：首页 / 学习 / 设置 */
+enum class MainTab(val title: String, val icon: ImageVector) {
+    Home("首页", Icons.Rounded.Home),
+    Study("学习", Icons.Rounded.School),
+    Settings("设置", Icons.Rounded.Settings)
+}
+
+sealed class Screen {
+    data class Main(val tab: MainTab) : Screen()
+    data object WordPage : Screen()
+    data object LibraryManagement : Screen()
+    data object MoErPage : Screen()
+    data object DictationPage : Screen()
+    data object PronunciationPage : Screen()
+    data object MeaningPage : Screen()
+}
 
 class MainActivity : ComponentActivity() {
     private lateinit var speechService: SpeechService
@@ -61,7 +88,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             EnglishTheme {
-                var currentScreen by remember { mutableStateOf<Screen>(Screen.Home) }
+                var currentScreen by remember { mutableStateOf<Screen>(Screen.Main(MainTab.Home)) }
                 var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
                 var isCheckingUpdate by remember { mutableStateOf(false) }
                 var isSyncing by remember { mutableStateOf(false) }
@@ -69,9 +96,12 @@ class MainActivity : ComponentActivity() {
                 var unknownCount by remember { mutableStateOf(0) }
                 val scope = rememberCoroutineScope()
                 val syncViewModel: WordViewModel = viewModel()
+                val taskStore = remember { DailyTaskStore(this@MainActivity) }
+
+                val backToStudy: () -> Unit = { currentScreen = Screen.Main(MainTab.Study) }
 
                 LaunchedEffect(currentScreen) {
-                    if (currentScreen is Screen.Home) {
+                    if (currentScreen is Screen.Main) {
                         val repo = WordRepository(this@MainActivity)
                         knownCount = repo.getKnownCount()
                         unknownCount = repo.getUnknownCount()
@@ -94,10 +124,6 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
-                }
-
-                val onMoEr: () -> Unit = {
-                    currentScreen = Screen.MoErPage
                 }
 
                 val checkForUpdates: () -> Unit = {
@@ -166,47 +192,85 @@ class MainActivity : ComponentActivity() {
                 }
 
                 when (val screen = currentScreen) {
-                    is Screen.Home -> HomeScreen(
-                        onWordClick = {
-                            ensureAudioPermission {
-                                currentScreen = Screen.WordPage
+                    is Screen.Main -> {
+                        // 底部三 Tab 容器
+                        Scaffold(
+                            bottomBar = {
+                                NavigationBar {
+                                    MainTab.entries.forEach { tab ->
+                                        NavigationBarItem(
+                                            selected = tab == screen.tab,
+                                            onClick = { currentScreen = Screen.Main(tab) },
+                                            icon = {
+                                                Icon(
+                                                    imageVector = tab.icon,
+                                                    contentDescription = tab.title
+                                                )
+                                            },
+                                            label = { Text(tab.title) }
+                                        )
+                                    }
+                                }
                             }
-                        },
-                        onDictionaryClick = {
-                            currentScreen = Screen.LibraryManagement
-                        },
-                        onMoErClick = onMoEr,
-                        onDictationClick = {
-                            currentScreen = Screen.DictationPage
-                        },
-                        onPronunciationClick = {
-                            ensureAudioPermission {
-                                currentScreen = Screen.PronunciationPage
+                        ) { innerPadding ->
+                            Box(modifier = Modifier.padding(innerPadding)) {
+                                when (screen.tab) {
+                                    MainTab.Home -> HomeTabScreen(
+                                        onOpenStudy = {
+                                            currentScreen = Screen.Main(MainTab.Study)
+                                        }
+                                    )
+                                    MainTab.Study -> HomeScreen(
+                                        onWordClick = {
+                                            ensureAudioPermission {
+                                                currentScreen = Screen.WordPage
+                                            }
+                                        },
+                                        onDictionaryClick = {
+                                            currentScreen = Screen.LibraryManagement
+                                        },
+                                        onMoErClick = {
+                                            currentScreen = Screen.MoErPage
+                                        },
+                                        onDictationClick = {
+                                            currentScreen = Screen.DictationPage
+                                        },
+                                        onPronunciationClick = {
+                                            ensureAudioPermission {
+                                                currentScreen = Screen.PronunciationPage
+                                            }
+                                        },
+                                        onMeaningClick = {
+                                            ensureAudioPermission {
+                                                currentScreen = Screen.MeaningPage
+                                            }
+                                        },
+                                        onSettingsClick = {
+                                            currentScreen = Screen.Main(MainTab.Settings)
+                                        },
+                                        onCheckUpdate = checkForUpdates,
+                                        isCheckingUpdate = isCheckingUpdate,
+                                        knownCount = knownCount,
+                                        unknownCount = unknownCount
+                                    )
+                                    MainTab.Settings -> SettingsScreen(onBack = null)
+                                }
                             }
-                        },
-                        onMeaningClick = {
-                            ensureAudioPermission {
-                                currentScreen = Screen.MeaningPage
-                            }
-                        },
-                        onCheckUpdate = checkForUpdates,
-                        isCheckingUpdate = isCheckingUpdate,
-                        knownCount = knownCount,
-                        unknownCount = unknownCount
-                    )
+                        }
+                    }
                     is Screen.WordPage -> {
                         val wordViewModel: WordViewModel = viewModel()
                         WordScreen(
                             viewModel = wordViewModel,
                             speechService = speechService,
-                            onBack = { currentScreen = Screen.Home }
+                            onBack = backToStudy
                         )
                     }
                     is Screen.LibraryManagement -> {
                         val libraryViewModel: WordViewModel = viewModel()
                         LibraryManagementScreen(
                             viewModel = libraryViewModel,
-                            onBack = { currentScreen = Screen.Home },
+                            onBack = backToStudy,
                             onSync = onSync,
                             isSyncing = isSyncing,
                             onReset = {
@@ -233,23 +297,27 @@ class MainActivity : ComponentActivity() {
                         }
                         MoErScreen(
                             words = words,
-                            onBack = { currentScreen = Screen.Home }
+                            onBack = backToStudy,
+                            onMoErSecond = { taskStore.recordMoErSecond() }
                         )
                     }
                     is Screen.DictationPage -> TrainingPage(
                         mode = TrainingMode.Dictation,
                         speechService = speechService,
-                        onBack = { currentScreen = Screen.Home }
+                        onBack = backToStudy,
+                        onTrainingCompleted = { mode -> markTrainingDone(taskStore, mode) }
                     )
                     is Screen.PronunciationPage -> TrainingPage(
                         mode = TrainingMode.Pronunciation,
                         speechService = speechService,
-                        onBack = { currentScreen = Screen.Home }
+                        onBack = backToStudy,
+                        onTrainingCompleted = { mode -> markTrainingDone(taskStore, mode) }
                     )
                     is Screen.MeaningPage -> TrainingPage(
                         mode = TrainingMode.Meaning,
                         speechService = speechService,
-                        onBack = { currentScreen = Screen.Home }
+                        onBack = backToStudy,
+                        onTrainingCompleted = { mode -> markTrainingDone(taskStore, mode) }
                     )
                 }
             }
@@ -267,21 +335,20 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-sealed class Screen {
-    data object Home : Screen()
-    data object WordPage : Screen()
-    data object LibraryManagement : Screen()
-    data object MoErPage : Screen()
-    data object DictationPage : Screen()
-    data object PronunciationPage : Screen()
-    data object MeaningPage : Screen()
+private fun markTrainingDone(store: DailyTaskStore, mode: TrainingMode) {
+    when (mode) {
+        TrainingMode.Dictation -> store.markDictationDone()
+        TrainingMode.Pronunciation -> store.markPronunciationDone()
+        TrainingMode.Meaning -> store.markMeaningDone()
+    }
 }
 
 @Composable
 private fun TrainingPage(
     mode: TrainingMode,
     speechService: SpeechService,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onTrainingCompleted: (TrainingMode) -> Unit = {}
 ) {
     val trainingViewModel: WordViewModel = viewModel()
     var trainingWords by remember { mutableStateOf<List<Word>>(emptyList()) }
@@ -290,6 +357,7 @@ private fun TrainingPage(
         mode = mode,
         words = trainingWords,
         speechService = speechService,
-        onBack = onBack
+        onBack = onBack,
+        onTrainingCompleted = onTrainingCompleted
     )
 }

@@ -105,6 +105,58 @@ class WordRepository(context: Context) {
     private val unknownDao = db.unknownWordDao()
     private val prefs = context.getSharedPreferences("english_seq", Context.MODE_PRIVATE)
     private val gson = Gson()
+    private val taskStore = DailyTaskStore(context)
+
+    /** 每日发现不认识单词相关偏好键 */
+    private companion object {
+        const val KEY_DAILY_UNKNOWN_LIMIT = "daily_unknown_found_limit"
+        const val KEY_DAILY_UNKNOWN_DATE = "daily_unknown_found_date"
+        const val KEY_DAILY_UNKNOWN_COUNT = "daily_unknown_found_count"
+        const val DEFAULT_DAILY_UNKNOWN_LIMIT = 5
+        const val DAILY_LIMIT_MIN = 5
+        const val DAILY_LIMIT_MAX = 50
+    }
+
+    /** 每日发现（标记）不认识单词的数量上限，达到后今日学习任务完成 */
+    fun getDailyUnknownLimit(): Int =
+        prefs.getInt(KEY_DAILY_UNKNOWN_LIMIT, DEFAULT_DAILY_UNKNOWN_LIMIT)
+
+    fun setDailyUnknownLimit(limit: Int) {
+        prefs.edit().putInt(KEY_DAILY_UNKNOWN_LIMIT, limit.coerceIn(DAILY_LIMIT_MIN, DAILY_LIMIT_MAX)).apply()
+    }
+
+    private fun todayKey(): String =
+        java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+            .format(java.util.Date())
+
+    /** 当天已发现的不认识单词数量（跨天自动重置） */
+    fun dailyUnknownFoundCount(): Int {
+        val today = todayKey()
+        val storedDate = prefs.getString(KEY_DAILY_UNKNOWN_DATE, "") ?: ""
+        return if (storedDate == today) prefs.getInt(KEY_DAILY_UNKNOWN_COUNT, 0) else 0
+    }
+
+    /** 今日学习任务是否已完成（当天发现数达到上限） */
+    fun isDailyTaskDone(): Boolean =
+        dailyUnknownFoundCount() >= getDailyUnknownLimit()
+
+    /**
+     * 记录一个新发现的不认识单词，返回今日任务是否因此完成。
+     * 只在背单词过程中新词被标记为“不认识”时调用（复习词不算）。
+     */
+    fun recordUnknownFoundAndCheckDone(): Boolean {
+        val today = todayKey()
+        val storedDate = prefs.getString(KEY_DAILY_UNKNOWN_DATE, "") ?: ""
+        val count = if (storedDate == today) prefs.getInt(KEY_DAILY_UNKNOWN_COUNT, 0) else 0
+        val newCount = count + 1
+        prefs.edit()
+            .putString(KEY_DAILY_UNKNOWN_DATE, today)
+            .putInt(KEY_DAILY_UNKNOWN_COUNT, newCount)
+            .apply()
+        // 同步记录到每日任务存储（用于首页任务/历史展示）
+        taskStore.recordUnknownFound()
+        return newCount >= getDailyUnknownLimit()
+    }
 
     private val api: WordApiService by lazy {
         val logging = HttpLoggingInterceptor().apply {

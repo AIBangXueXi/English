@@ -106,7 +106,8 @@ fun TrainingScreen(
     mode: TrainingMode,
     words: List<Word>,
     speechService: SpeechService,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onTrainingCompleted: (TrainingMode) -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -157,7 +158,10 @@ fun TrainingScreen(
     }
 
     fun nextWord() {
-        if (index < words.size - 1) index++ else completed = true
+        if (index < words.size - 1) index++ else {
+            completed = true
+            onTrainingCompleted(mode)
+        }
     }
 
     fun markPassed() {

@@ -77,7 +77,8 @@ data class MoErWord(
 @Composable
 fun MoErScreen(
     words: List<MoErWord>,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onMoErSecond: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -122,8 +123,15 @@ fun MoErScreen(
                     currentIndex = i
                     val mp = createPlayerFromUrl(context, url)
                     if (mp != null) {
+                        var lastTick = System.currentTimeMillis()
                         while (isActive && isPlaying && mp.isPlaying) {
                             delay(300)
+                            // 实际播放时长累计（每秒回调一次）
+                            val now = System.currentTimeMillis()
+                            if (now - lastTick >= 1000) {
+                                lastTick = now
+                                onMoErSecond()
+                            }
                         }
                     }
                     played++
