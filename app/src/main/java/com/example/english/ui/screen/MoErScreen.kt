@@ -1,11 +1,8 @@
 package com.example.english.ui.screen
 
-import android.media.AudioAttributes
-import android.media.MediaPlayer
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,14 +55,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.content.Context
-import com.example.english.data.createPlayerFromUrl
+import com.example.english.data.playAudioAwait
 import com.example.english.data.resolveStaticUrl
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 data class MoErWord(
     val word: String,
@@ -114,29 +109,20 @@ fun MoErScreen(
         isPlaying = true
         playJob = scope.launch {
             var i = currentIndex
-            var played = 0
             while (isActive && isPlaying) {
                 if (i >= words.size) i = 0
                 val word = words[i]
                 val url = resolveStaticUrl(word.repeatVoice)
                 if (url.isNotEmpty()) {
                     currentIndex = i
-                    val mp = createPlayerFromUrl(context, url)
-                    if (mp != null) {
-                        var lastTick = System.currentTimeMillis()
-                        while (isActive && isPlaying && mp.isPlaying) {
-                            delay(300)
-                            // 实际播放时长累计（每秒回调一次）
-                            val now = System.currentTimeMillis()
-                            if (now - lastTick >= 1000) {
-                                lastTick = now
-                                onMoErSecond()
-                            }
-                        }
-                    }
-                    played++
-                    if (isPlaying) delay(2000)
+                    // playAudioAwait 由 completion/error listener 驱动，不会在已 release 的
+                    // MediaPlayer 上调用方法（createPlayerFromUrl 会在播放完成时 release，随后
+                    // 轮询 mp.isPlaying() 在部分机型会抛 IllegalStateException 导致崩溃）。
+                    playAudioAwait(context, url, onSecondElapsed = {
+                        scope.launch { onMoErSecond() }
+                    })
                 }
+                if (isPlaying) delay(2000)
                 i++
             }
         }

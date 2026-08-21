@@ -9,6 +9,7 @@ import com.example.english.data.entity.KnownWord
 import com.example.english.data.entity.UnknownWord
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -98,6 +99,87 @@ suspend fun createPlayerFromUrl(context: Context, url: String): MediaPlayer? =
             start()
         }
     }
+
+/**
+ * Download a remote audio URL, play it to completion, and suspend until it
+ * finishes (or errors / the coroutine is cancelled).
+ *
+ * Unlike [createPlayerFromUrl] (which auto-releases the player on completion,
+ * so polling `isPlaying()` on the released instance can throw on some devices),
+ * this is driven by `setOnCompletionListener` / `setOnErrorListener`. The player
+ * and temp file are always released/deleted, and no method is ever called on a
+ * released player.
+ *
+ * [onSecondElapsed] is invoked roughly once per second of actual playback.
+ * Returns true when playback completed normally, false on error/cancellation.
+ */
+suspend fun playAudioAwait(
+    context: Context,
+    url: String,
+    onSecondElapsed: () -> Unit
+): Boolean = withContext(Dispatchers.IO) {
+    val tempFile = java.io.File(context.cacheDir, "audio_${System.currentTimeMillis()}.wav")
+    try {
+        val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+        conn.setRequestProperty("User-Agent", "EnglishApp")
+        conn.connectTimeout = 10_000
+        conn.readTimeout = 10_000
+        conn.connect()
+        if (conn.responseCode != 200) {
+            conn.disconnect()
+            return@withContext false
+        }
+        conn.inputStream.use { input ->
+            tempFile.outputStream().use { output -> input.copyTo(output) }
+        }
+        conn.disconnect()
+    } catch (_: Exception) {
+        tempFile.delete()
+        return@withContext false
+    }
+    if (!tempFile.exists() || tempFile.length() < 44) {
+        tempFile.delete()
+        return@withContext false
+    }
+
+    val finished = java.util.concurrent.atomic.AtomicBoolean(false)
+    val completedOk = java.util.concurrent.atomic.AtomicBoolean(false)
+    val mp = MediaPlayer()
+    try {
+        mp.setAudioAttributes(
+            AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                .build()
+        )
+        mp.setDataSource(tempFile.absolutePath)
+        mp.setOnCompletionListener {
+            completedOk.set(true)
+            finished.set(true)
+        }
+        mp.setOnErrorListener { _, _, _ ->
+            finished.set(true)
+            true
+        }
+        mp.prepare()
+        mp.start()
+
+        var lastTick = System.currentTimeMillis()
+        while (!finished.get()) {
+            if (!isActive) break
+            Thread.sleep(300)
+            val now = System.currentTimeMillis()
+            if (now - lastTick >= 1000) {
+                lastTick = now
+                onSecondElapsed()
+            }
+        }
+    } finally {
+        try { mp.release() } catch (_: Exception) {}
+        tempFile.delete()
+    }
+    completedOk.get()
+}
 
 class WordRepository(context: Context) {
     private val db = AppDatabase.getInstance(context)
