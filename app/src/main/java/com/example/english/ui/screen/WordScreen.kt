@@ -50,6 +50,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.platform.LocalContext
 
 import androidx.compose.material.icons.Icons
@@ -969,19 +970,28 @@ fun WordScreen(
                                     .padding(horizontal = 16.dp, vertical = 12.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                // 字母框 + 非字母分隔符；点击任意处聚焦键盘
+                                // 字母框 + 非字母分隔符；点击任意字母框可重新聚焦键盘
                                 BasicTextField(
                                     value = spellingInput,
-                                    onValueChange = { spellingInput = it; spellingResult = null },
+                                    onValueChange = { raw ->
+                                        val targetLetterCount = targetChars.count { it.isLetter() }
+                                        // 只保留 a-z/A-Z 英文字母并限制数量：
+                                        // 去掉空格、标点、中文等其他字符，避免字母之间出现空格或数量超出单词字母总数
+                                        spellingInput = raw.filter {
+                                            it in 'a'..'z' || it in 'A'..'Z'
+                                        }.take(targetLetterCount)
+                                        spellingResult = null
+                                    },
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .focusRequester(focusRequester)
-                                        .clickable { focusRequester.requestFocus() },
+                                        .clickable { focusRequester.requestFocus() }
+                                        .focusRequester(focusRequester),
                                     singleLine = true,
                                     textStyle = TextStyle(color = Color.Transparent, fontSize = 1.sp),
                                     keyboardOptions = KeyboardOptions(
                                         capitalization = KeyboardCapitalization.None,
                                         autoCorrectEnabled = false,
+                                        keyboardType = KeyboardType.Ascii,
                                         imeAction = ImeAction.Done
                                     ),
                                     keyboardActions = KeyboardActions(onDone = { commitSpelling() }),
@@ -1011,7 +1021,11 @@ fun WordScreen(
                                                                 MaterialTheme.colorScheme.outline
                                                                     .copy(alpha = 0.4f),
                                                                 RoundedCornerShape(8.dp)
-                                                            ),
+                                                            )
+                                                            .clickable {
+                                                                // 点击任意字母框都能重新聚焦，避免失焦后无法输入
+                                                                focusRequester.requestFocus()
+                                                            },
                                                         contentAlignment = Alignment.Center
                                                     ) {
                                                         Text(

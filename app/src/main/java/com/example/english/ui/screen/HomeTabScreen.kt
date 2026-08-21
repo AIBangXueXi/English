@@ -343,7 +343,9 @@ private fun TaskItem(
     val accent = if (done) Color(0xFF4CAF50) else Color(0xFFF44336)
     Card(
         onClick = { if (!done) onClick() },
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 10.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
