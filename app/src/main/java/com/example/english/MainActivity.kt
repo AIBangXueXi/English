@@ -218,6 +218,27 @@ class MainActivity : ComponentActivity() {
                                     MainTab.Home -> HomeTabScreen(
                                         onOpenStudy = {
                                             currentScreen = Screen.Main(MainTab.Study)
+                                        },
+                                        onWordTaskClick = {
+                                            ensureAudioPermission {
+                                                currentScreen = Screen.WordPage
+                                            }
+                                        },
+                                        onMoErTaskClick = {
+                                            currentScreen = Screen.MoErPage
+                                        },
+                                        onDictationTaskClick = {
+                                            currentScreen = Screen.DictationPage
+                                        },
+                                        onPronunciationTaskClick = {
+                                            ensureAudioPermission {
+                                                currentScreen = Screen.PronunciationPage
+                                            }
+                                        },
+                                        onMeaningTaskClick = {
+                                            ensureAudioPermission {
+                                                currentScreen = Screen.MeaningPage
+                                            }
                                         }
                                     )
                                     MainTab.Study -> HomeScreen(

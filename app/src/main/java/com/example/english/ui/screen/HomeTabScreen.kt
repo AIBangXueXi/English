@@ -58,7 +58,12 @@ import com.example.english.data.WordRepository
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeTabScreen(
-    onOpenStudy: () -> Unit
+    onOpenStudy: () -> Unit,
+    onWordTaskClick: () -> Unit = {},
+    onMoErTaskClick: () -> Unit = {},
+    onDictationTaskClick: () -> Unit = {},
+    onPronunciationTaskClick: () -> Unit = {},
+    onMeaningTaskClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val repository = remember { WordRepository(context) }
@@ -175,31 +180,36 @@ fun HomeTabScreen(
                         detail = "${todayTask.unknownFound} / $unknownLimit",
                         done = todayTask.unknownFound >= unknownLimit,
                         progress = if (unknownLimit == 0) 1f
-                        else (todayTask.unknownFound.toFloat() / unknownLimit).coerceIn(0f, 1f)
+                        else (todayTask.unknownFound.toFloat() / unknownLimit).coerceIn(0f, 1f),
+                        onClick = onWordTaskClick
                     )
                     TaskItem(
                         title = "磨耳训练 30 分钟",
                         detail = formatSeconds(todayTask.moErSeconds) + " / 30 分钟",
                         done = todayTask.moErSeconds >= MO_ER_TARGET_SECONDS,
-                        progress = (todayTask.moErSeconds.toFloat() / MO_ER_TARGET_SECONDS).coerceIn(0f, 1f)
+                        progress = (todayTask.moErSeconds.toFloat() / MO_ER_TARGET_SECONDS).coerceIn(0f, 1f),
+                        onClick = onMoErTaskClick
                     )
                     TaskItem(
                         title = "默写单词训练一遍",
                         detail = if (todayTask.dictationDone) "已完成" else "未完成",
                         done = todayTask.dictationDone,
-                        progress = if (todayTask.dictationDone) 1f else 0f
+                        progress = if (todayTask.dictationDone) 1f else 0f,
+                        onClick = onDictationTaskClick
                     )
                     TaskItem(
                         title = "发音训练一遍",
                         detail = if (todayTask.pronunciationDone) "已完成" else "未完成",
                         done = todayTask.pronunciationDone,
-                        progress = if (todayTask.pronunciationDone) 1f else 0f
+                        progress = if (todayTask.pronunciationDone) 1f else 0f,
+                        onClick = onPronunciationTaskClick
                     )
                     TaskItem(
                         title = "单词意思训练一遍",
                         detail = if (todayTask.meaningDone) "已完成" else "未完成",
                         done = todayTask.meaningDone,
-                        progress = if (todayTask.meaningDone) 1f else 0f
+                        progress = if (todayTask.meaningDone) 1f else 0f,
+                        onClick = onMeaningTaskClick
                     )
                 }
             }
@@ -321,61 +331,76 @@ fun HomeTabScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TaskItem(
     title: String,
     detail: String,
     done: Boolean,
-    progress: Float
+    progress: Float,
+    onClick: () -> Unit = {}
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
+    val accent = if (done) Color(0xFF4CAF50) else Color(0xFFF44336)
+    Card(
+        onClick = { if (!done) onClick() },
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        // 完成标记
-        Surface(
-            modifier = Modifier.size(22.dp),
-            shape = CircleShape,
-            color = if (done) Color(0xFF4CAF50) else MaterialTheme.colorScheme.surfaceVariant
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 10.dp, horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                if (done) {
-                    Icon(
-                        imageVector = Icons.Rounded.Check,
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp),
-                        tint = Color.White
-                    )
+            // 完成标记：完成=绿，未完成=红
+            Surface(
+                modifier = Modifier.size(22.dp),
+                shape = CircleShape,
+                color = accent
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    if (done) {
+                        Icon(
+                            imageVector = Icons.Rounded.Check,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = Color.White
+                        )
+                    }
                 }
             }
-        }
-        Spacer(modifier = Modifier.width(10.dp))
-        Column(modifier = Modifier.weight(1f)) {
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (done) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    else MaterialTheme.colorScheme.onSurface,
+                    fontWeight = if (done) FontWeight.Normal else FontWeight.Medium
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(5.dp),
+                    color = accent,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.width(10.dp))
             Text(
-                text = title,
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (done) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                else MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(5.dp),
-                color = if (done) Color(0xFF4CAF50) else MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant
+                text = detail,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (done) accent.copy(alpha = 0.9f)
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.End
             )
         }
-        Spacer(modifier = Modifier.width(10.dp))
-        Text(
-            text = detail,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.End
-        )
     }
 }
 
