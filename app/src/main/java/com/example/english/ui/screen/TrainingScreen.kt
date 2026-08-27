@@ -336,6 +336,15 @@ fun TrainingScreen(
                             .padding(innerPadding)
                             .imePadding()
                     ) {
+                        // 默写字母框的键盘焦点（展示区点击字母框时聚焦到底部隐藏输入框）
+                        val dictationFocusRequester = remember { FocusRequester() }
+                        // 进入默写或换词时自动聚焦到底部隐藏输入框，方便直接拼写
+                        LaunchedEffect(index, mode) {
+                            if (mode == TrainingMode.Dictation) {
+                                dictationFocusRequester.requestFocus()
+                            }
+                        }
+
                         Column(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -357,6 +366,8 @@ fun TrainingScreen(
                                 TrainingMode.Dictation -> DictationBody(
                                     word = word,
                                     gaveUp = gaveUp,
+                                    spellingInput = spellingInput,
+                                    onLetterClick = { dictationFocusRequester.requestFocus() },
                                     isPlayingPronunciation = isPlayingPronunciation,
                                     onTogglePronunciation = {
                                         togglePronunciation(
@@ -574,6 +585,7 @@ fun TrainingScreen(
                             interactionSource = interactionSource,
                             isRecording = isRecording,
                             isProcessing = isProcessing,
+                            dictationFocusRequester = dictationFocusRequester,
                             onGiveUp = { gaveUp = true },
                             onNext = { nextWord() }
                         )
@@ -684,6 +696,8 @@ private fun PhoneticRow(
 private fun DictationBody(
     word: Word,
     gaveUp: Boolean,
+    spellingInput: String,
+    onLetterClick: () -> Unit,
     isPlayingPronunciation: Boolean,
     onTogglePronunciation: () -> Unit
 ) {
@@ -706,14 +720,11 @@ private fun DictationBody(
                 textAlign = TextAlign.Center
             )
         } else {
-            Text(
-                text = word.word.map { "＿" }.joinToString(" "),
-                style = MaterialTheme.typography.displaySmall.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 36.sp
-                ),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
+            // 在单词展示位置直接显示输入的字母（一字母一框）
+            DictationLetterBoxes(
+                word = word,
+                spellingInput = spellingInput,
+                onLetterClick = onLetterClick
             )
         }
         Spacer(modifier = Modifier.height(16.dp))
@@ -812,6 +823,7 @@ private fun BoxScope.BottomActionArea(
     interactionSource: MutableInteractionSource,
     isRecording: Boolean,
     isProcessing: Boolean,
+    dictationFocusRequester: FocusRequester,
     onGiveUp: () -> Unit,
     onNext: () -> Unit
 ) {
@@ -854,11 +866,11 @@ private fun BoxScope.BottomActionArea(
 
             mode == TrainingMode.Dictation -> {
                 DictationInput(
-                    word = word,
                     spellingInput = spellingInput,
                     spellingError = spellingError,
                     onSpellingChange = onSpellingChange,
                     onSpellingDone = onSpellingDone,
+                    dictationFocusRequester = dictationFocusRequester,
                     onGiveUp = onGiveUp
                 )
             }
@@ -969,33 +981,18 @@ private fun BoxScope.BottomActionArea(
     }
 }
 
-/** 默写输入：一字母一框，实时绿/红反馈 */
+/** 默写输入：底部隐藏输入框（接收键盘），字母框显示在单词展示位置 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun DictationInput(
-    word: Word,
     spellingInput: String,
     spellingError: String?,
     onSpellingChange: (String) -> Unit,
     onSpellingDone: () -> Unit,
+    dictationFocusRequester: FocusRequester,
     onGiveUp: () -> Unit
 ) {
-    val targetChars = word.word.map { it }
-    val letterIndexBySlot = run {
-        var cursor = 0
-        targetChars.map { ch ->
-            if (ch.isLetter()) {
-                val idx = cursor
-                cursor++
-                idx
-            } else -1
-        }
-    }
-    val typedLetters = spellingInput.filter { it.isLetter() }
-    val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(word.word) {
-        focusRequester.requestFocus()
-    }
+    val focusRequester = dictationFocusRequester
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         BasicTextField(
@@ -1013,52 +1010,7 @@ private fun DictationInput(
                 imeAction = ImeAction.Done
             ),
             keyboardActions = KeyboardActions(onDone = { onSpellingDone() }),
-            decorationBox = { innerTextField ->
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
-                    verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically),
-                    maxItemsInEachRow = Int.MAX_VALUE
-                ) {
-                    targetChars.forEachIndexed { pos, ch ->
-                        if (ch.isLetter()) {
-                            val typed = typedLetters.getOrNull(letterIndexBySlot[pos])
-                            val correct = typed != null && typed.equals(ch, ignoreCase = true)
-                            val bg = when {
-                                typed == null -> Color(0xFFECEFF1)
-                                correct -> Color(0xFFE0F2E1)
-                                else -> Color(0xFFFFEBEE)
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .size(56.dp)
-                                    .background(bg, RoundedCornerShape(10.dp))
-                                    .border(
-                                        1.dp,
-                                        MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
-                                        RoundedCornerShape(8.dp)
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = (typed ?: ' ').toString(),
-                                    style = MaterialTheme.typography.headlineSmall
-                                        .copy(fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                        } else {
-                            Text(
-                                text = ch.toString(),
-                                style = MaterialTheme.typography.headlineSmall
-                                    .copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.outline
-                            )
-                        }
-                    }
-                    innerTextField()
-                }
-            }
+            decorationBox = { innerTextField -> innerTextField() }
         )
 
         Spacer(modifier = Modifier.height(8.dp))

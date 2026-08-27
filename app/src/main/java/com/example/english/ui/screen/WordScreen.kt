@@ -428,6 +428,9 @@ fun WordScreen(
                         .padding(innerPadding)
                         .imePadding()
                 ) {
+                    // 默写字母框的键盘焦点（展示区点击字母框时聚焦到底部隐藏输入框）
+                    val dictationFocusRequester = remember { FocusRequester() }
+
                     // Scrollable content
                     Column(
                         modifier = Modifier
@@ -473,14 +476,11 @@ fun WordScreen(
                                 textAlign = TextAlign.Center
                             )
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "＿＿＿",
-                                style = MaterialTheme.typography.displaySmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 36.sp
-                                ),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center
+                            // 在单词展示位置直接显示输入的字母（一字母一框）
+                            DictationLetterBoxes(
+                                word = word,
+                                spellingInput = spellingInput,
+                                onLetterClick = { dictationFocusRequester.requestFocus() }
                             )
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
@@ -928,20 +928,9 @@ fun WordScreen(
                         }
 
                         isDictation -> {
-                            // Stage 2: 默写 —— 一字母一框，实时绿/红反馈
+                            // Stage 2: 默写 —— 在单词展示位置输入字母，实时绿/红反馈
                             val targetChars = word.word.map { it }
-                            val letterIndexBySlot = run {
-                                var cursor = 0
-                                targetChars.map { ch ->
-                                    if (ch.isLetter()) {
-                                        val idx = cursor
-                                        cursor++
-                                        idx
-                                    } else -1
-                                }
-                            }
-                            val typedLetters = spellingInput.filter { it.isLetter() }
-                            val focusRequester = remember { FocusRequester() }
+                            val focusRequester = dictationFocusRequester
                             LaunchedEffect(isDictation, currentWord) {
                                 focusRequester.requestFocus()
                             }
@@ -970,7 +959,7 @@ fun WordScreen(
                                     .padding(horizontal = 16.dp, vertical = 12.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                // 字母框 + 非字母分隔符；点击任意字母框可重新聚焦键盘
+                                // 隐藏的输入框：接收键盘输入，字母框显示在单词展示位置
                                 BasicTextField(
                                     value = spellingInput,
                                     onValueChange = { raw ->
@@ -995,58 +984,7 @@ fun WordScreen(
                                         imeAction = ImeAction.Done
                                     ),
                                     keyboardActions = KeyboardActions(onDone = { commitSpelling() }),
-                                    decorationBox = { innerTextField ->
-                                        FlowRow(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
-                                            verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically),
-                                            maxItemsInEachRow = Int.MAX_VALUE
-                                        ) {
-                                            targetChars.forEachIndexed { pos, ch ->
-                                                if (ch.isLetter()) {
-                                                    val typed = typedLetters.getOrNull(letterIndexBySlot[pos])
-                                                    val correct =
-                                                        typed != null && typed.equals(ch, ignoreCase = true)
-                                                    val bg = when {
-                                                        typed == null -> Color(0xFFECEFF1) // 未填：浅灰
-                                                        correct -> Color(0xFFE0F2E1)       // 拼对：淡绿
-                                                        else -> Color(0xFFFFEBEE)           // 拼错：淡红
-                                                    }
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .size(56.dp)
-                                                            .background(bg, RoundedCornerShape(10.dp))
-                                                            .border(
-                                                                1.dp,
-                                                                MaterialTheme.colorScheme.outline
-                                                                    .copy(alpha = 0.4f),
-                                                                RoundedCornerShape(8.dp)
-                                                            )
-                                                            .clickable {
-                                                                // 点击任意字母框都能重新聚焦，避免失焦后无法输入
-                                                                focusRequester.requestFocus()
-                                                            },
-                                                        contentAlignment = Alignment.Center
-                                                    ) {
-                                                        Text(
-                                                            text = (typed ?: ' ').toString(),
-                                                            style = MaterialTheme.typography.headlineSmall
-                                                                .copy(fontWeight = FontWeight.Bold),
-                                                            color = MaterialTheme.colorScheme.onSurface
-                                                        )
-                                                    }
-                                                } else {
-                                                    Text(
-                                                        text = ch.toString(),
-                                                        style = MaterialTheme.typography.headlineSmall
-                                                            .copy(fontWeight = FontWeight.Bold),
-                                                        color = MaterialTheme.colorScheme.outline
-                                                    )
-                                                }
-                                            }
-                                            innerTextField()
-                                        }
-                                    }
+                                    decorationBox = { innerTextField -> innerTextField() }
                                 )
 
                                 Spacer(modifier = Modifier.height(8.dp))
@@ -1612,6 +1550,77 @@ internal suspend fun playPronunciation(context: Context, source: String): Boolea
     } catch (e: Exception) {
         Log.e("EnglishApp", "playPronunciation failed: source=$source", e)
         false
+    }
+}
+
+/**
+ * 默写字母框：一字母一框，实时反馈。
+ * 显示在单词展示位置；输入错误的字母框背景为浅红色，
+ * 拼对的为淡绿色，未填的为浅灰色。
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun DictationLetterBoxes(
+    word: Word,
+    spellingInput: String,
+    onLetterClick: () -> Unit = {}
+) {
+    val targetChars = word.word.map { it }
+    val letterIndexBySlot = run {
+        var cursor = 0
+        targetChars.map { ch ->
+            if (ch.isLetter()) {
+                val idx = cursor
+                cursor++
+                idx
+            } else -1
+        }
+    }
+    val typedLetters = spellingInput.filter { it.isLetter() }
+
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
+        verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically),
+        maxItemsInEachRow = Int.MAX_VALUE
+    ) {
+        targetChars.forEachIndexed { pos, ch ->
+            if (ch.isLetter()) {
+                val typed = typedLetters.getOrNull(letterIndexBySlot[pos])
+                val correct = typed != null && typed.equals(ch, ignoreCase = true)
+                val bg = when {
+                    typed == null -> Color(0xFFECEFF1)   // 未填：浅灰
+                    correct -> Color(0xFFE0F2E1)         // 拼对：淡绿
+                    else -> Color(0xFFFFEBEE)            // 拼错：浅红
+                }
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .background(bg, RoundedCornerShape(10.dp))
+                        .border(
+                            1.dp,
+                            MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                            RoundedCornerShape(8.dp)
+                        )
+                        .clickable { onLetterClick() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = (typed ?: ' ').toString(),
+                        style = MaterialTheme.typography.headlineSmall
+                            .copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            } else {
+                Text(
+                    text = ch.toString(),
+                    style = MaterialTheme.typography.headlineSmall
+                        .copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.outline
+                )
+            }
+        }
     }
 }
 
