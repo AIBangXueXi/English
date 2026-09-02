@@ -1,6 +1,9 @@
 package com.example.english.ui.screen
 
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.MediaPlayer
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -51,6 +54,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -79,12 +83,21 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.english.data.api.DeepSeekService
+import com.example.english.data.resolveRawResId
+import com.example.english.data.resolveStaticUrl
 import com.example.english.speech.SpeechService
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+
+private val syllableColors = listOf(
+    Color(0xFF4A90D9),
+    Color(0xFFE8913A),
+    Color(0xFF50B86C)
+)
 
 enum class TrainingMode(
     val title: String,
@@ -243,7 +256,7 @@ fun TrainingScreen(
         if (mode == TrainingMode.Dictation && !passed && !gaveUp) {
             val target = currentWord?.word ?: return@LaunchedEffect
             if (spellingInput.isNotBlank() &&
-                spellingInput.trim().equals(target, ignoreCase = true)
+                spellingInput.trim().equals(target.replace(" ", ""), ignoreCase = true)
             ) {
                 markPassed()
             }
@@ -405,6 +418,7 @@ fun TrainingScreen(
 
                                 TrainingMode.Meaning -> MeaningBody(
                                     word = word,
+                                    gaveUp = gaveUp,
                                     isPlayingPronunciation = isPlayingPronunciation,
                                     onTogglePronunciation = {
                                         togglePronunciation(
@@ -555,7 +569,7 @@ fun TrainingScreen(
                             onSpellingDone = {
                                 val input = spellingInput.trim()
                                 if (input.isNotEmpty() &&
-                                    !input.equals(word.word, ignoreCase = true)
+                                    !input.equals(word.word.replace(" ", ""), ignoreCase = true)
                                 ) {
                                     spellingError = "拼写有误，再试试"
                                 }
@@ -665,6 +679,134 @@ private fun togglePronunciation(
             playPronunciation(context, word.pronunciation)
             setPlaying(false)
         })
+    }
+}
+
+@Composable
+private fun EtymologyBreakdown(
+    syllables: List<Syllable>,
+    etymologyPronunciation: List<String>,
+    revealed: Boolean
+) {
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    var playingIndex by remember { mutableStateOf<Int?>(null) }
+    var syllableJob by remember { mutableStateOf<Job?>(null) }
+
+    DisposableEffect(Unit) {
+        onDispose { syllableJob?.cancel() }
+    }
+
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        syllables.forEachIndexed { index, syllable ->
+            val color = syllableColors[index % syllableColors.size]
+            val pronUrl = etymologyPronunciation.getOrNull(index)
+                ?.takeIf { it.isNotEmpty() }
+                ?.let { resolveStaticUrl(it) } ?: ""
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                if (revealed) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Text(
+                            text = syllable.phonetic,
+                            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
+                            color = color.copy(alpha = 0.8f),
+                            textAlign = TextAlign.Center
+                        )
+                        if (pronUrl.isNotEmpty()) {
+                            IconButton(
+                                onClick = {
+                                    if (playingIndex == index) {
+                                        syllableJob?.cancel()
+                                        playingIndex = null
+                                    } else {
+                                        syllableJob?.cancel()
+                                        playingIndex = index
+                                        syllableJob = scope.launch(Dispatchers.IO) {
+                                            try {
+                                                Log.d("EnglishApp", "Syllable play: index=$index text=${syllable.text} url=$pronUrl")
+                                                val mp = if (pronUrl.startsWith("raw:", ignoreCase = true)) {
+                                                    val resId = resolveRawResId(context, pronUrl)
+                                                    if (resId != 0) MediaPlayer.create(context, resId) else null
+                                                } else {
+                                                    val tempFile = java.io.File(context.cacheDir, "syl_${System.currentTimeMillis()}.wav")
+                                                    try {
+                                                        val conn = java.net.URL(pronUrl).openConnection() as java.net.HttpURLConnection
+                                                        conn.setRequestProperty("User-Agent", "EnglishApp")
+                                                        conn.connectTimeout = 10000
+                                                        conn.readTimeout = 10000
+                                                        conn.connect()
+                                                        if (conn.responseCode == 200) {
+                                                            conn.inputStream.use { input ->
+                                                                tempFile.outputStream().use { output -> input.copyTo(output) }
+                                                            }
+                                                        } else { conn.disconnect(); null }
+                                                        conn.disconnect()
+                                                    } catch (e: Exception) { null }
+                                                    if (tempFile.exists() && tempFile.length() > 44) {
+                                                        MediaPlayer().apply {
+                                                            setAudioAttributes(
+                                                                AudioAttributes.Builder()
+                                                                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                                                                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                                                                    .build()
+                                                            )
+                                                            setDataSource(tempFile.absolutePath)
+                                                            setOnCompletionListener {
+                                                                it.release()
+                                                                tempFile.delete()
+                                                            }
+                                                            setOnErrorListener { m, _, _ ->
+                                                                m.release()
+                                                                tempFile.delete()
+                                                                true
+                                                            }
+                                                            prepare()
+                                                            start()
+                                                        }
+                                                    } else null
+                                                }
+                                                if (mp != null) {
+                                                    if (pronUrl.startsWith("raw:", ignoreCase = true)) mp.start()
+                                                    while (isActive && mp.isPlaying) { delay(300) }
+                                                    try { mp.release() } catch (_: Exception) {}
+                                                }
+                                            } catch (e: Exception) {
+                                                Log.e("EnglishApp", "Syllable play failed: url=$pronUrl", e)
+                                            }
+                                            playingIndex = null
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (playingIndex == index) Icons.Rounded.Stop else Icons.Rounded.VolumeUp,
+                                    contentDescription = if (playingIndex == index) "停止" else "发音",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = color
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+                Text(
+                    text = syllable.text,
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 32.sp
+                    ),
+                    color = color,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
     }
 }
 
@@ -785,6 +927,7 @@ private fun PronunciationBody(
 @Composable
 private fun MeaningBody(
     word: Word,
+    gaveUp: Boolean,
     isPlayingPronunciation: Boolean,
     onTogglePronunciation: () -> Unit
 ) {
@@ -800,13 +943,97 @@ private fun MeaningBody(
         )
         Spacer(modifier = Modifier.height(8.dp))
         PhoneticRow(word, isPlayingPronunciation, onTogglePronunciation)
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = "说出或输入这个单词的意思",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.primary,
-            textAlign = TextAlign.Center
-        )
+        // Etymology breakdown（与背单词一致：拆词在点击“不认识”后显示音标与逐段发音）
+        if (word.syllables.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(24.dp))
+            EtymologyBreakdown(word.syllables, word.etymologyPronunciation, gaveUp)
+        }
+        if (gaveUp) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = word.meaning,
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 22.sp
+                ),
+                color = MaterialTheme.colorScheme.onBackground,
+                textAlign = TextAlign.Center
+            )
+
+            // Word forms（与背单词 reveal 后的词形变化样式一致）
+            val forms = buildList {
+                if (word.plural.isNotEmpty()) add("复数: ${word.plural}")
+                if (word.thirdPersonSingular.isNotEmpty()) add("三单: ${word.thirdPersonSingular}")
+                if (word.presentParticiple.isNotEmpty()) add("现在分词: ${word.presentParticiple}")
+                if (word.pastTense.isNotEmpty()) add("过去式: ${word.pastTense}")
+            }
+            if (forms.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(20.dp))
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "词形变化",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            forms.forEach { form ->
+                                Surface(
+                                    color = MaterialTheme.colorScheme.secondaryContainer,
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        text = form,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        textAlign = TextAlign.Center,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Remark（与背单词 reveal 后的备注样式一致）
+            if (word.remark.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = word.remark,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                            RoundedCornerShape(8.dp)
+                        )
+                        .padding(12.dp)
+                )
+            }
+        } else {
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "说出或输入这个单词的意思",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }
 

@@ -221,7 +221,7 @@ fun WordScreen(
     LaunchedEffect(spellingInput, isDictation) {
         if (isDictation && spellingInput.isNotBlank()) {
             val target = currentWord?.word ?: return@LaunchedEffect
-            if (spellingInput.trim().equals(target, ignoreCase = true)) {
+            if (spellingInput.trim().equals(target.replace(" ", ""), ignoreCase = true)) {
                 spellingPassed = true
                 showCelebration = true
                 spellingResult = null
@@ -942,7 +942,7 @@ fun WordScreen(
                             val commitSpelling: () -> Unit = {
                                 val input = spellingInput.trim()
                                 if (input.isNotEmpty()) {
-                                    if (input.equals(word.word, ignoreCase = true)) {
+                                    if (input.equals(word.word.replace(" ", ""), ignoreCase = true)) {
                                         spellingPassed = true
                                         showCelebration = true
                                         spellingResult = null
