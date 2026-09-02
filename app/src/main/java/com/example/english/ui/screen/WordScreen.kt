@@ -52,6 +52,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -430,6 +431,7 @@ fun WordScreen(
                 ) {
                     // 默写字母框的键盘焦点（展示区点击字母框时聚焦到底部隐藏输入框）
                     val dictationFocusRequester = remember { FocusRequester() }
+                    val keyboardController = LocalSoftwareKeyboardController.current
 
                     // Scrollable content
                     Column(
@@ -933,6 +935,9 @@ fun WordScreen(
                             val focusRequester = dictationFocusRequester
                             LaunchedEffect(isDictation, currentWord) {
                                 focusRequester.requestFocus()
+                                // 写对进入下一个单词时，默认唤起键盘直接拼写
+                                delay(150)
+                                keyboardController?.show()
                             }
                             val commitSpelling: () -> Unit = {
                                 val input = spellingInput.trim()

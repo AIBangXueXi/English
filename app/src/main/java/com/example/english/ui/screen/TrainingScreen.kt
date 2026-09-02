@@ -70,6 +70,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -338,10 +339,14 @@ fun TrainingScreen(
                     ) {
                         // 默写字母框的键盘焦点（展示区点击字母框时聚焦到底部隐藏输入框）
                         val dictationFocusRequester = remember { FocusRequester() }
-                        // 进入默写或换词时自动聚焦到底部隐藏输入框，方便直接拼写
+                        val keyboardController = LocalSoftwareKeyboardController.current
+                        // 进入默写或换词时自动聚焦并唤起键盘，方便直接拼写
                         LaunchedEffect(index, mode) {
                             if (mode == TrainingMode.Dictation) {
                                 dictationFocusRequester.requestFocus()
+                                // 等焦点随下一帧应用后再唤起软键盘，否则 show 会失效
+                                delay(150)
+                                keyboardController?.show()
                             }
                         }
 
