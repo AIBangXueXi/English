@@ -14,6 +14,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -153,6 +156,8 @@ fun MoErScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        // 底部让出系统导航栏高度，避免按钮被屏幕操作键盖住
+                        .windowInsetsPadding(WindowInsets.navigationBars)
                         .padding(horizontal = 24.dp, vertical = 12.dp),
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically

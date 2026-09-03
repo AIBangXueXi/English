@@ -119,28 +119,38 @@ suspend fun playAudioAwait(
     onSecondElapsed: () -> Unit
 ): Boolean = withContext(Dispatchers.IO) {
     val tempFile = java.io.File(context.cacheDir, "audio_${System.currentTimeMillis()}.wav")
-    try {
-        val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-        conn.setRequestProperty("User-Agent", "EnglishApp")
-        conn.connectTimeout = 10_000
-        conn.readTimeout = 10_000
-        conn.connect()
-        if (conn.responseCode != 200) {
+    // 优先使用本地缓存，断网时也能播放
+    var cached = AudioCache.get(context, url)
+    if (cached != null) {
+        // 直接复用缓存文件，播放完不删除（下次还能用）
+    } else {
+        try {
+            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            conn.setRequestProperty("User-Agent", "EnglishApp")
+            conn.connectTimeout = 10_000
+            conn.readTimeout = 10_000
+            conn.connect()
+            if (conn.responseCode != 200) {
+                conn.disconnect()
+                return@withContext false
+            }
+            conn.inputStream.use { input ->
+                tempFile.outputStream().use { output -> input.copyTo(output) }
+            }
             conn.disconnect()
+        } catch (_: Exception) {
+            tempFile.delete()
             return@withContext false
         }
-        conn.inputStream.use { input ->
-            tempFile.outputStream().use { output -> input.copyTo(output) }
+        if (!tempFile.exists() || tempFile.length() < 44) {
+            tempFile.delete()
+            return@withContext false
         }
-        conn.disconnect()
-    } catch (_: Exception) {
-        tempFile.delete()
-        return@withContext false
+        // 下载成功则写入持久缓存；失败不影响本次播放
+        cached = AudioCache.put(context, url, tempFile)
     }
-    if (!tempFile.exists() || tempFile.length() < 44) {
-        tempFile.delete()
-        return@withContext false
-    }
+
+    val fileToPlay = cached ?: tempFile
 
     val finished = java.util.concurrent.atomic.AtomicBoolean(false)
     val completedOk = java.util.concurrent.atomic.AtomicBoolean(false)
@@ -152,7 +162,7 @@ suspend fun playAudioAwait(
                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                 .build()
         )
-        mp.setDataSource(tempFile.absolutePath)
+        mp.setDataSource(fileToPlay.absolutePath)
         mp.setOnCompletionListener {
             completedOk.set(true)
             finished.set(true)
@@ -176,7 +186,10 @@ suspend fun playAudioAwait(
         }
     } finally {
         try { mp.release() } catch (_: Exception) {}
-        tempFile.delete()
+        // 只删除一次性临时文件；缓存文件保留供离线播放
+        if (!tempFile.absolutePath.equals(fileToPlay.absolutePath, ignoreCase = true)) {
+            tempFile.delete()
+        }
     }
     completedOk.get()
 }
