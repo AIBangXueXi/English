@@ -111,12 +111,15 @@ suspend fun createPlayerFromUrl(context: Context, url: String): MediaPlayer? =
  * released player.
  *
  * [onSecondElapsed] is invoked roughly once per second of actual playback.
+ * [speed] is the playback rate (1.0 = normal); applied via
+ * MediaPlayer.setPlaybackParams (API 23+, minSdk here is 24).
  * Returns true when playback completed normally, false on error/cancellation.
  */
 suspend fun playAudioAwait(
     context: Context,
     url: String,
-    onSecondElapsed: () -> Unit
+    onSecondElapsed: () -> Unit,
+    speed: Float = 1f
 ): Boolean = withContext(Dispatchers.IO) {
     val tempFile = java.io.File(context.cacheDir, "audio_${System.currentTimeMillis()}.wav")
     // 优先使用本地缓存，断网时也能播放
@@ -172,6 +175,14 @@ suspend fun playAudioAwait(
             true
         }
         mp.prepare()
+        // 倍速播放（1.0 = 正常；设备不支持时忽略）
+        if (speed > 0f && java.lang.Float.compare(speed, 1f) != 0) {
+            try {
+                val params = mp.playbackParams
+                params.speed = speed
+                mp.playbackParams = params
+            } catch (_: Exception) { }
+        }
         mp.start()
 
         var lastTick = System.currentTimeMillis()

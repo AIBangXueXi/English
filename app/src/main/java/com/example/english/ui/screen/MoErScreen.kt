@@ -3,6 +3,7 @@ package com.example.english.ui.screen
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -83,6 +84,7 @@ fun MoErScreen(
     var isPlaying by remember { mutableStateOf(false) }
     var currentIndex by remember { mutableIntStateOf(0) }
     var playJob by remember { mutableStateOf<Job?>(null) }
+    var playbackSpeed by remember { mutableStateOf(1f) }
     val listState = rememberLazyListState()
 
     // Auto-scroll to keep current word visible
@@ -123,7 +125,7 @@ fun MoErScreen(
                     // 轮询 mp.isPlaying() 在部分机型会抛 IllegalStateException 导致崩溃）。
                     playAudioAwait(context, url, onSecondElapsed = {
                         scope.launch { onMoErSecond() }
-                    })
+                    }, speed = playbackSpeed)
                 }
                 if (isPlaying) delay(2000)
                 i++
@@ -153,15 +155,51 @@ fun MoErScreen(
                 shadowElevation = 8.dp,
                 color = MaterialTheme.colorScheme.surface
             ) {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         // 底部让出系统导航栏高度，避免按钮被屏幕操作键盖住
                         .windowInsetsPadding(WindowInsets.navigationBars)
                         .padding(horizontal = 24.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    // 倍速选择
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "倍速",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        SpeedChip("0.5x", playbackSpeed == 0.5f) {
+                            playbackSpeed = 0.5f
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        SpeedChip("0.75x", playbackSpeed == 0.75f) {
+                            playbackSpeed = 0.75f
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        SpeedChip("1x", playbackSpeed == 1f) {
+                            playbackSpeed = 1f
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        SpeedChip("1.25x", playbackSpeed == 1.25f) {
+                            playbackSpeed = 1.25f
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        SpeedChip("1.5x", playbackSpeed == 1.5f) {
+                            playbackSpeed = 1.5f
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        SpeedChip("2x", playbackSpeed == 2f) {
+                            playbackSpeed = 2f
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
                     Button(
                         onClick = {
                             if (isPlaying) stopPlayback() else startPlayback()
@@ -335,5 +373,27 @@ fun MoErScreen(
                 item { Spacer(modifier = Modifier.height(8.dp)) }
             }
         }
+    }
+}
+
+@Composable
+private fun SpeedChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier.clickable(onClick = onClick),
+        shape = RoundedCornerShape(8.dp),
+        color = if (selected)
+            MaterialTheme.colorScheme.primary
+        else
+            MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (selected)
+                MaterialTheme.colorScheme.onPrimary
+            else
+                MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+        )
     }
 }
