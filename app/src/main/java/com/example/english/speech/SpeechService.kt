@@ -135,44 +135,62 @@ class SpeechService(private val context: Context) {
         writeWav(lastWavFile!!, pcmData)
         Log.d(TAG, "WAV file written: ${lastWavFile!!.length()} bytes")
 
-        // Send raw PCM to ASR
-        val token = TokenGenerator.getToken()
-        Log.d(TAG, "Got token: ${token.take(10)}...")
+        // Send raw PCM to ASR（断网/超时等任何网络异常都不能崩溃，统一转为失败结果）
+        try {
+            val token = TokenGenerator.getToken()
+            Log.d(TAG, "Got token: ${token.take(10)}...")
 
-        val url = java.net.URL("$ASR_ENDPOINT?appkey=$APP_KEY&format=pcm&sample_rate=$SAMPLE_RATE&enable_intermediate_result=false")
-        val conn = url.openConnection() as HttpsURLConnection
-        conn.requestMethod = "POST"
-        conn.setRequestProperty("X-NLS-Token", token)
-        conn.setRequestProperty("Content-Type", "application/octet-stream")
-        conn.setRequestProperty("Content-Length", pcmData.size.toString())
-        conn.connectTimeout = 15_000
-        conn.readTimeout = 15_000
-        conn.doOutput = true
+            val url = java.net.URL("$ASR_ENDPOINT?appkey=$APP_KEY&format=pcm&sample_rate=$SAMPLE_RATE&enable_intermediate_result=false")
+            val conn = url.openConnection() as HttpsURLConnection
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("X-NLS-Token", token)
+            conn.setRequestProperty("Content-Type", "application/octet-stream")
+            conn.setRequestProperty("Content-Length", pcmData.size.toString())
+            conn.connectTimeout = 15_000
+            conn.readTimeout = 15_000
+            conn.doOutput = true
 
-        conn.outputStream.use { it.write(pcmData) }
+            conn.outputStream.use { it.write(pcmData) }
 
-        val responseCode = conn.responseCode
-        Log.d(TAG, "ASR response code: $responseCode")
+            val responseCode = conn.responseCode
+            Log.d(TAG, "ASR response code: $responseCode")
 
-        val responseText = if (responseCode in 200..299) {
-            conn.inputStream.bufferedReader().readText()
-        } else {
-            conn.errorStream?.bufferedReader()?.readText() ?: ""
-        }
-        Log.d(TAG, "ASR response body: $responseText")
-
-        val json = JSONObject(responseText)
-        val status = json.optInt("status", -1)
-        if (status == 20000000) {
-            val result = json.optString("result", "")
-            if (result.isEmpty()) {
-                Result.failure(Exception("未识别到语音内容，请大声朗读单词"))
+            val responseText = if (responseCode in 200..299) {
+                conn.inputStream.bufferedReader().readText()
             } else {
-                Result.success(result.trim())
+                conn.errorStream?.bufferedReader()?.readText() ?: ""
             }
-        } else {
-            val errorMsg = json.optString("message", "识别失败")
-            Result.failure(Exception("$errorMsg (code: $status)"))
+            Log.d(TAG, "ASR response body: $responseText")
+
+            if (responseText.isBlank()) {
+                return@withContext Result.failure(Exception("语音识别失败：网络异常，请检查网络后重试"))
+            }
+
+            val json = JSONObject(responseText)
+            val status = json.optInt("status", -1)
+            if (status == 20000000) {
+                val result = json.optString("result", "")
+                if (result.isEmpty()) {
+                    Result.failure(Exception("未识别到语音内容，请大声朗读单词"))
+                } else {
+                    Result.success(result.trim())
+                }
+            } else {
+                val errorMsg = json.optString("message", "识别失败")
+                Result.failure(Exception("$errorMsg (code: $status)"))
+            }
+        } catch (e: java.net.UnknownHostException) {
+            Log.e(TAG, "ASR failed: no network", e)
+            Result.failure(Exception("语音识别失败：当前没有网络连接，请联网后重试"))
+        } catch (e: java.net.SocketTimeoutException) {
+            Log.e(TAG, "ASR failed: timeout", e)
+            Result.failure(Exception("语音识别超时，请检查网络后重试"))
+        } catch (e: java.io.IOException) {
+            Log.e(TAG, "ASR failed: io error", e)
+            Result.failure(Exception("语音识别失败：网络异常，请检查网络后重试"))
+        } catch (e: Exception) {
+            Log.e(TAG, "ASR failed", e)
+            Result.failure(Exception("语音识别失败：${e.message ?: "未知错误"}"))
         }
     }
 
