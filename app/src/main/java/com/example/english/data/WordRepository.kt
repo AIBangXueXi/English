@@ -221,6 +221,10 @@ class WordRepository(context: Context) {
         const val DEFAULT_DAILY_UNKNOWN_LIMIT = 5
         const val DAILY_LIMIT_MIN = 5
         const val DAILY_LIMIT_MAX = 50
+
+        // 连续两天答对才转认识的机制（背单词复习）
+        const val CONSECUTIVE_DAYS_REQUIRED = 2
+        const val ONE_DAY_MS = 24 * 60 * 60 * 1000L
     }
 
     /** 每日发现（标记）不认识单词的数量上限，达到后今日学习任务完成 */
@@ -310,31 +314,27 @@ class WordRepository(context: Context) {
         updateStoredSeq(1)
     }
 
-    // Ebbinghaus intervals in millis: 1d, 2d, 4d, 7d
-    // (15min and 1h stages removed)
-    private val ebbinghausIntervals = longArrayOf(
-        24 * 60 * 60 * 1000L,
-        2 * 24 * 60 * 60 * 1000L,
-        4 * 24 * 60 * 60 * 1000L,
-        7 * 24 * 60 * 60 * 1000L
-    )
+    // 连续两天答对才转认识的机制（背单词复习）：
+    // - stage 表示「已连续答对天数」：0 = 今天刚标记不认识 / 答错后清零重来
+    // - 复习时答对一次 stage+1；连续答对满 CONSECUTIVE_DAYS_REQUIRED 天即转认识
+    // - 任何一天答错则 stage 归 0（连续天数清零，重新累计两天，即“往后顺延”）
+    // - 每次复习间隔固定 +1 天，保证是“连续两天”而非同一天内多次
 
     suspend fun onUnknownWordCorrect(word: UnknownWord): Boolean = withContext(Dispatchers.IO) {
-        val nextStage = word.stage + 1
-        if (nextStage >= ebbinghausIntervals.size) {
+        val nextStreak = word.stage + 1
+        if (nextStreak >= CONSECUTIVE_DAYS_REQUIRED) {
             knownDao.insert(word.toKnownWord())
             unknownDao.deleteById(word.id)
             true
         } else {
-            val nextTime = System.currentTimeMillis() + ebbinghausIntervals[word.stage]
-            unknownDao.updateStage(word.id, nextStage, nextTime)
+            unknownDao.updateStage(word.id, nextStreak, System.currentTimeMillis() + ONE_DAY_MS)
             false
         }
     }
 
     suspend fun onUnknownWordWrong(word: UnknownWord) = withContext(Dispatchers.IO) {
-        // 答错后回到第 1 阶段，但下一次复习按第一阶段间隔排期（+1天），而不是立即（0=立即可复习）
-        unknownDao.updateStage(word.id, 0, System.currentTimeMillis() + ebbinghausIntervals.first())
+        // 任何一天答错：连续答对天数清零，明天重新开始累计
+        unknownDao.updateStage(word.id, 0, System.currentTimeMillis() + ONE_DAY_MS)
     }
 
     suspend fun addToKnown(apiWord: ApiWord) = withContext(Dispatchers.IO) {
@@ -342,12 +342,11 @@ class WordRepository(context: Context) {
     }
 
     suspend fun addToUnknown(apiWord: ApiWord) = withContext(Dispatchers.IO) {
-        // 首次标记为不认识：进入待复习，第一次复习按第一阶段间隔排期（+1天），而非立即（0）
-        val firstInterval = ebbinghausIntervals.first()
+        // 今天标记为不认识：连续答对天数 0，明天开始第一次复习
         unknownDao.insert(
             apiWord.toUnknownWord(
                 stage = 0,
-                nextReviewTime = System.currentTimeMillis() + firstInterval
+                nextReviewTime = System.currentTimeMillis() + ONE_DAY_MS
             )
         )
     }
