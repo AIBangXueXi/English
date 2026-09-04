@@ -184,18 +184,11 @@ fun HomeTabScreen(
                         onClick = onWordTaskClick
                     )
                     TaskItem(
-                        title = "磨耳训练 30 分钟",
-                        detail = formatSeconds(todayTask.moErSeconds) + " / 30 分钟",
-                        done = todayTask.moErSeconds >= MO_ER_TARGET_SECONDS,
-                        progress = (todayTask.moErSeconds.toFloat() / MO_ER_TARGET_SECONDS).coerceIn(0f, 1f),
-                        onClick = onMoErTaskClick
-                    )
-                    TaskItem(
-                        title = "默写单词训练一遍",
-                        detail = if (todayTask.dictationDone) "已完成" else "未完成",
-                        done = todayTask.dictationDone,
-                        progress = if (todayTask.dictationDone) 1f else 0f,
-                        onClick = onDictationTaskClick
+                        title = "单词意思训练一遍",
+                        detail = if (todayTask.meaningDone) "已完成" else "未完成",
+                        done = todayTask.meaningDone,
+                        progress = if (todayTask.meaningDone) 1f else 0f,
+                        onClick = onMeaningTaskClick
                     )
                     TaskItem(
                         title = "发音训练一遍",
@@ -205,11 +198,18 @@ fun HomeTabScreen(
                         onClick = onPronunciationTaskClick
                     )
                     TaskItem(
-                        title = "单词意思训练一遍",
-                        detail = if (todayTask.meaningDone) "已完成" else "未完成",
-                        done = todayTask.meaningDone,
-                        progress = if (todayTask.meaningDone) 1f else 0f,
-                        onClick = onMeaningTaskClick
+                        title = "默写单词训练一遍",
+                        detail = if (todayTask.dictationDone) "已完成" else "未完成",
+                        done = todayTask.dictationDone,
+                        progress = if (todayTask.dictationDone) 1f else 0f,
+                        onClick = onDictationTaskClick
+                    )
+                    TaskItem(
+                        title = "磨耳训练 30 分钟",
+                        detail = formatSeconds(todayTask.moErSeconds) + " / 30 分钟",
+                        done = todayTask.moErSeconds >= MO_ER_TARGET_SECONDS,
+                        progress = (todayTask.moErSeconds.toFloat() / MO_ER_TARGET_SECONDS).coerceIn(0f, 1f),
+                        onClick = onMoErTaskClick
                     )
                 }
             }
