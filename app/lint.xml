@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!-- local.properties is machine-generated (points at the local Android SDK path
+         and is gitignored). Its unescaped Windows path is expected and not a code issue. -->
+    <issue id="PropertyEscape">
+        <ignore path="**/local.properties" />
+    </issue>
+</lint>
