@@ -591,7 +591,11 @@ fun TrainingScreen(
                             spellingInput = spellingInput,
                             spellingError = spellingError,
                             onSpellingChange = {
-                                spellingInput = it
+                                // 只保留 a-z/A-Z 英文字母，并限制数量不超过单词字母总数
+                                val targetLetterCount = word.word.count { it.isLetter() }
+                                spellingInput = it.filter { c ->
+                                    c in 'a'..'z' || c in 'A'..'Z'
+                                }.take(targetLetterCount)
                                 spellingError = null
                             },
                             onSpellingDone = {
