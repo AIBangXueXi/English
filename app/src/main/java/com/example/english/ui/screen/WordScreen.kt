@@ -101,6 +101,7 @@ import com.example.english.data.api.DeepSeekService
 import com.example.english.speech.SpeechService
 import com.example.english.data.resolveRawResId
 import com.example.english.data.resolveStaticUrl
+import com.example.english.data.playAudioAwait
 import com.example.english.ui.theme.EnglishTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -180,6 +181,9 @@ fun WordScreen(
     var playJob by remember { mutableStateOf<Job?>(null) }
     var studySeconds by remember { mutableStateOf(0) }
     var showRestReminder by remember { mutableStateOf(false) }
+    // 磨耳音频：点“不认识”后播放一次，播完才允许点“下一个”
+    var isMoErPlaying by remember { mutableStateOf(false) }
+    var moErJob by remember { mutableStateOf<Job?>(null) }
 
     LaunchedEffect(Unit) {
         while (isActive) {
@@ -215,6 +219,9 @@ fun WordScreen(
         waitingForDictation = false
         isPlayingPronunciation = false
         isAiChecking = false
+        isMoErPlaying = false
+        moErJob?.cancel()
+        moErJob = null
     }
 
     // 默写完成自动确认：拼写完全正确即自动标记通过（无需点“确认”）
@@ -244,6 +251,29 @@ fun WordScreen(
         onDispose {
             playJob?.cancel()
             pronunciationJob?.cancel()
+            moErJob?.cancel()
+        }
+    }
+
+    // 播放当前单词的磨耳音频一次；播放期间“下一个”按钮不可点。
+    val playMoErOnce: () -> Unit = {
+        val word = currentWord
+        if (word != null) {
+            val url = if (word.repeatVoice.isNotBlank()) word.repeatVoice else ""
+            if (url.isEmpty()) {
+                // 没有磨耳音频时直接放行，避免卡住“下一个”
+                isMoErPlaying = false
+            } else {
+                isMoErPlaying = true
+                moErJob?.cancel()
+                moErJob = scope.launch {
+                    try {
+                        playAudioAwait(context, url, onSecondElapsed = {})
+                    } catch (_: Exception) {
+                    }
+                    isMoErPlaying = false
+                }
+            }
         }
     }
 
@@ -899,6 +929,7 @@ fun WordScreen(
                                                 committed = true
                                                 viewModel.onWrongAnswer()
                                             }
+                                            playMoErOnce()
                                         },
                                         modifier = Modifier.weight(1f).height(52.dp),
                                         shape = RoundedCornerShape(14.dp),
@@ -1017,6 +1048,7 @@ fun WordScreen(
                                                 committed = true
                                                 viewModel.onWrongAnswer()
                                             }
+                                            playMoErOnce()
                                         },
                                         modifier = Modifier.weight(1f).height(52.dp),
                                         shape = RoundedCornerShape(14.dp),
@@ -1053,18 +1085,32 @@ fun WordScreen(
                                     onClick = {
                                         viewModel.loadNextWord()
                                     },
+                                    enabled = !isMoErPlaying,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(52.dp),
-                                    shape = RoundedCornerShape(14.dp)
-                                ) {
-                                    Text("下一个", fontSize = 16.sp)
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(20.dp)
+                                    shape = RoundedCornerShape(14.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
+                                ) {
+                                    if (isMoErPlaying) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(20.dp),
+                                            strokeWidth = 2.dp
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("磨耳音频播放中...", fontSize = 16.sp)
+                                    } else {
+                                        Text("下一个", fontSize = 16.sp)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
