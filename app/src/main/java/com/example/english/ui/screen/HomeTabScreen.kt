@@ -205,8 +205,8 @@ fun HomeTabScreen(
                         onClick = onDictationTaskClick
                     )
                     TaskItem(
-                        title = "磨耳训练 30 分钟",
-                        detail = formatSeconds(todayTask.moErSeconds) + " / 30 分钟",
+                        title = "磨耳训练 15 分钟",
+                        detail = formatSeconds(todayTask.moErSeconds) + " / 15 分钟",
                         done = todayTask.moErSeconds >= MO_ER_TARGET_SECONDS,
                         progress = (todayTask.moErSeconds.toFloat() / MO_ER_TARGET_SECONDS).coerceIn(0f, 1f),
                         onClick = onMoErTaskClick

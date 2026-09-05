@@ -7,12 +7,12 @@ import java.util.Date
 import java.util.Locale
 import java.text.SimpleDateFormat
 
-/** 磨耳训练每日目标：30 分钟 */
-const val MO_ER_TARGET_SECONDS = 30 * 60
+/** 磨耳训练每日目标：15 分钟 */
+const val MO_ER_TARGET_SECONDS = 15 * 60
 
 /**
  * 某一天的学习任务完成情况。
- * 任务：背单词发现 [unknownLimit] 个不认识 / 磨耳 30 分钟 / 训练专区三个各执行一遍。
+ * 任务：背单词发现 [unknownLimit] 个不认识 / 磨耳 15 分钟 / 训练专区三个各执行一遍。
  */
 data class DailyTask(
     val unknownFound: Int = 0,
