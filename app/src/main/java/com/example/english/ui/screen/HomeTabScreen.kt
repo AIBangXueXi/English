@@ -1,6 +1,7 @@
 package com.example.english.ui.screen
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -60,6 +61,8 @@ import com.example.english.data.WordRepository
 fun HomeTabScreen(
     onOpenStudy: () -> Unit,
     onWordTaskClick: () -> Unit = {},
+    onKnownWordsClick: () -> Unit = {},
+    onUnknownWordsClick: () -> Unit = {},
     onMoErTaskClick: () -> Unit = {},
     onDictationTaskClick: () -> Unit = {},
     onPronunciationTaskClick: () -> Unit = {},
@@ -241,8 +244,18 @@ fun HomeTabScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
-                        StatChip(label = "认识", value = knownCount, color = Color(0xFF4CAF50))
-                        StatChip(label = "不认识", value = unknownCount, color = Color(0xFF9E9E9E))
+                        StatChip(
+                            label = "认识",
+                            value = knownCount,
+                            color = Color(0xFF4CAF50),
+                            onClick = onKnownWordsClick
+                        )
+                        StatChip(
+                            label = "不认识",
+                            value = unknownCount,
+                            color = Color(0xFF9E9E9E),
+                            onClick = onUnknownWordsClick
+                        )
                         StatChip(label = "今日完成", value = done, color = MaterialTheme.colorScheme.primary)
                     }
                 }
@@ -407,8 +420,23 @@ private fun TaskItem(
 }
 
 @Composable
-private fun StatChip(label: String, value: Int, color: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+private fun StatChip(
+    label: String,
+    value: Int,
+    color: Color,
+    onClick: (() -> Unit)? = null
+) {
+    val clickModifier = if (onClick != null) {
+        Modifier
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+    } else {
+        Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+    }
+    Column(
+        modifier = clickModifier,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
         Text(
             text = value.toString(),
             style = MaterialTheme.typography.headlineSmall.copy(

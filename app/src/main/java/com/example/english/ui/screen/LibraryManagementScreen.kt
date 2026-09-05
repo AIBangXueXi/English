@@ -73,6 +73,9 @@ import kotlinx.coroutines.withContext
 
 private enum class LibraryTable { KNOWN, UNKNOWN }
 
+/** 词库分组：已掌握 / 待复习。用于首页统计点击后指定展开哪个分组。 */
+enum class LibrarySection { KNOWN, UNKNOWN }
+
 private data class PendingDelete(
     val table: LibraryTable,
     val id: Long,
@@ -86,13 +89,14 @@ fun LibraryManagementScreen(
     onBack: () -> Unit,
     onSync: () -> Unit = {},
     isSyncing: Boolean = false,
-    onReset: () -> Unit = {}
+    onReset: () -> Unit = {},
+    initialExpandedSection: LibrarySection? = null
 ) {
     val knownWords by viewModel.libraryKnownWords.collectAsStateWithLifecycle()
     val unknownWords by viewModel.libraryUnknownWords.collectAsStateWithLifecycle()
     var pendingDelete by remember { mutableStateOf<PendingDelete?>(null) }
-    var knownExpanded by remember { mutableStateOf(false) }
-    var unknownExpanded by remember { mutableStateOf(false) }
+    var knownExpanded by remember { mutableStateOf(initialExpandedSection == LibrarySection.KNOWN) }
+    var unknownExpanded by remember { mutableStateOf(initialExpandedSection == LibrarySection.UNKNOWN) }
     val context = LocalContext.current
     var showResetDialog by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }

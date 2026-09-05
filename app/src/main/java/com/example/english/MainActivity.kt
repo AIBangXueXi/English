@@ -42,6 +42,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.english.ui.screen.HomeScreen
 import com.example.english.ui.screen.HomeTabScreen
 import com.example.english.ui.screen.LibraryManagementScreen
+import com.example.english.ui.screen.LibrarySection
 import com.example.english.ui.screen.MoErScreen
 import com.example.english.ui.screen.MoErWord
 import com.example.english.ui.screen.SettingsScreen
@@ -62,7 +63,7 @@ enum class MainTab(val title: String, val icon: ImageVector) {
 sealed class Screen {
     data class Main(val tab: MainTab) : Screen()
     data object WordPage : Screen()
-    data object LibraryManagement : Screen()
+    data class LibraryManagement(val expandedSection: LibrarySection? = null) : Screen()
     data object MoErPage : Screen()
     data object DictationPage : Screen()
     data object PronunciationPage : Screen()
@@ -224,6 +225,12 @@ class MainActivity : ComponentActivity() {
                                                 currentScreen = Screen.WordPage
                                             }
                                         },
+                                        onKnownWordsClick = {
+                                            currentScreen = Screen.LibraryManagement(LibrarySection.KNOWN)
+                                        },
+                                        onUnknownWordsClick = {
+                                            currentScreen = Screen.LibraryManagement(LibrarySection.UNKNOWN)
+                                        },
                                         onMoErTaskClick = {
                                             currentScreen = Screen.MoErPage
                                         },
@@ -248,7 +255,7 @@ class MainActivity : ComponentActivity() {
                                             }
                                         },
                                         onDictionaryClick = {
-                                            currentScreen = Screen.LibraryManagement
+                                            currentScreen = Screen.LibraryManagement()
                                         },
                                         onMoErClick = {
                                             currentScreen = Screen.MoErPage
@@ -294,6 +301,7 @@ class MainActivity : ComponentActivity() {
                             onBack = backToStudy,
                             onSync = onSync,
                             isSyncing = isSyncing,
+                            initialExpandedSection = screen.expandedSection,
                             onReset = {
                                 libraryViewModel.resetAll {
                                     Toast.makeText(
