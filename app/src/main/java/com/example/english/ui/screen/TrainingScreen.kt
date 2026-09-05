@@ -122,11 +122,23 @@ fun TrainingScreen(
     words: List<Word>,
     speechService: SpeechService,
     onBack: () -> Unit,
-    onTrainingCompleted: (TrainingMode) -> Unit = {}
+    onTrainingCompleted: (TrainingMode) -> Unit = {},
+    initialIndex: Int = 0,
+    onProgressChange: (Int) -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var index by remember { mutableIntStateOf(0) }
+    // 恢复上次训练进度：等词表加载完成后再定位到合法下标
+    var initialized by remember { mutableStateOf(false) }
+    LaunchedEffect(words) {
+        if (!initialized && words.isNotEmpty()) {
+            index = initialIndex.coerceIn(0, words.size - 1)
+            initialized = true
+            // 记录“已开始”状态（即使还在第 1 个词），首页据此显示 1/N
+            onProgressChange(index)
+        }
+    }
     var completed by remember { mutableStateOf(false) }
     var passed by remember { mutableStateOf(false) }
     var gaveUp by remember { mutableStateOf(false) }
@@ -179,7 +191,10 @@ fun TrainingScreen(
     }
 
     fun nextWord() {
-        if (index < words.size - 1) index++ else {
+        if (index < words.size - 1) {
+            index++
+            onProgressChange(index)
+        } else {
             completed = true
             onTrainingCompleted(mode)
         }

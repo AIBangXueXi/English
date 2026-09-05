@@ -30,9 +30,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.english.data.DailyTaskStore
+import com.example.english.data.TrainingProgressStore
 import com.example.english.data.WordRepository
 import com.example.english.data.WordViewModel
 import com.example.english.data.update.UpdateInfo
@@ -379,14 +381,21 @@ private fun TrainingPage(
     onBack: () -> Unit,
     onTrainingCompleted: (TrainingMode) -> Unit = {}
 ) {
+    val context = LocalContext.current
     val trainingViewModel: WordViewModel = viewModel()
+    val progressStore = remember { TrainingProgressStore(context) }
     var trainingWords by remember { mutableStateOf<List<Word>>(emptyList()) }
     LaunchedEffect(Unit) { trainingWords = trainingViewModel.getTrainingWords() }
     TrainingScreen(
         mode = mode,
         words = trainingWords,
+        initialIndex = progressStore.getIndex(mode.name),
         speechService = speechService,
+        onProgressChange = { index -> progressStore.saveIndex(mode.name, index, trainingWords.size) },
         onBack = onBack,
-        onTrainingCompleted = onTrainingCompleted
+        onTrainingCompleted = {
+            progressStore.clear(mode.name)
+            onTrainingCompleted(mode)
+        }
     )
 }

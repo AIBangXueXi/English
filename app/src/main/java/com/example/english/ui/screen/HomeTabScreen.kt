@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.sp
 import com.example.english.data.DailyTask
 import com.example.english.data.DailyTaskStore
 import com.example.english.data.MO_ER_TARGET_SECONDS
+import com.example.english.data.TrainingProgressStore
 import com.example.english.data.WordRepository
 
 /**
@@ -71,12 +72,16 @@ fun HomeTabScreen(
     val context = LocalContext.current
     val repository = remember { WordRepository(context) }
     val taskStore = remember { DailyTaskStore(context) }
+    val progressStore = remember { TrainingProgressStore(context) }
 
     var unknownLimit by remember { mutableIntStateOf(repository.getDailyUnknownLimit()) }
     var knownCount by remember { mutableIntStateOf(0) }
     var unknownCount by remember { mutableIntStateOf(0) }
     var todayTask by remember { mutableStateOf(DailyTask()) }
     var history by remember { mutableStateOf<List<Pair<String, DailyTask>>>(emptyList()) }
+    var meaningPos by remember { mutableIntStateOf(0) }
+    var pronunciationPos by remember { mutableIntStateOf(0) }
+    var dictationPos by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(Unit) {
         unknownLimit = repository.getDailyUnknownLimit()
@@ -84,6 +89,9 @@ fun HomeTabScreen(
         unknownCount = repository.getUnknownCount()
         todayTask = taskStore.getToday()
         history = taskStore.getHistory(7)
+        meaningPos = trainingPosition(progressStore, "Meaning", todayTask.meaningDone, unknownCount)
+        pronunciationPos = trainingPosition(progressStore, "Pronunciation", todayTask.pronunciationDone, unknownCount)
+        dictationPos = trainingPosition(progressStore, "Dictation", todayTask.dictationDone, unknownCount)
     }
 
     val done = todayTask.completedCount(unknownLimit)
@@ -188,28 +196,28 @@ fun HomeTabScreen(
                     )
                     TaskItem(
                         title = "单词意思训练一遍",
-                        detail = if (todayTask.meaningDone) "已完成" else "未完成",
+                        detail = "$meaningPos / $unknownCount",
                         done = todayTask.meaningDone,
-                        progress = if (todayTask.meaningDone) 1f else 0f,
+                        progress = if (unknownCount == 0) 1f else (meaningPos.toFloat() / unknownCount).coerceIn(0f, 1f),
                         onClick = onMeaningTaskClick
                     )
                     TaskItem(
                         title = "发音训练一遍",
-                        detail = if (todayTask.pronunciationDone) "已完成" else "未完成",
+                        detail = "$pronunciationPos / $unknownCount",
                         done = todayTask.pronunciationDone,
-                        progress = if (todayTask.pronunciationDone) 1f else 0f,
+                        progress = if (unknownCount == 0) 1f else (pronunciationPos.toFloat() / unknownCount).coerceIn(0f, 1f),
                         onClick = onPronunciationTaskClick
                     )
                     TaskItem(
                         title = "默写单词训练一遍",
-                        detail = if (todayTask.dictationDone) "已完成" else "未完成",
+                        detail = "$dictationPos / $unknownCount",
                         done = todayTask.dictationDone,
-                        progress = if (todayTask.dictationDone) 1f else 0f,
+                        progress = if (unknownCount == 0) 1f else (dictationPos.toFloat() / unknownCount).coerceIn(0f, 1f),
                         onClick = onDictationTaskClick
                     )
                     TaskItem(
                         title = "磨耳训练 15 分钟",
-                        detail = formatSeconds(todayTask.moErSeconds) + " / 15 分钟",
+                        detail = "${todayTask.moErSeconds / 60} / 15 分钟",
                         done = todayTask.moErSeconds >= MO_ER_TARGET_SECONDS,
                         progress = (todayTask.moErSeconds.toFloat() / MO_ER_TARGET_SECONDS).coerceIn(0f, 1f),
                         onClick = onMoErTaskClick
@@ -453,10 +461,20 @@ private fun StatChip(
     }
 }
 
-private fun formatSeconds(total: Int): String {
-    val m = total / 60
-    val s = total % 60
-    return if (m > 0) "${m}分${s}秒" else "${s}秒"
+/**
+ * 计算某个训练模式“当前练习到的位置”。
+ * 已完成 → 等于总数；已开始 → 保存的下标 + 1（第几个词）；未开始 → 0。
+ */
+private fun trainingPosition(
+    store: TrainingProgressStore,
+    modeKey: String,
+    done: Boolean,
+    total: Int
+): Int {
+    if (total == 0) return 0
+    if (done) return total
+    if (!store.isStarted(modeKey)) return 0
+    return (store.getIndex(modeKey) + 1).coerceIn(1, total)
 }
 
 private fun formatDate(key: String, isToday: Boolean): String {
