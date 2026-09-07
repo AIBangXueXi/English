@@ -43,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -53,6 +54,9 @@ import com.example.english.data.DailyTaskStore
 import com.example.english.data.MO_ER_TARGET_SECONDS
 import com.example.english.data.TrainingProgressStore
 import com.example.english.data.WordRepository
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * 首页 Tab：今日任务列表 + 历史完成情况 + 统计。
@@ -159,12 +163,21 @@ fun HomeTabScreen(
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "今日任务",
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.Bold
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "今日任务",
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = FontWeight.Bold
+                                    )
                                 )
-                            )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    // 例如：9月7日 周一
+                                    text = remember { formatToday() },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                             Text(
                                 text = "完成 $done / $total",
                                 style = MaterialTheme.typography.bodySmall,
@@ -491,3 +504,7 @@ private fun formatDate(key: String, isToday: Boolean): String {
     val parts = key.split("-")
     return if (parts.size == 3) "${parts[1]}/${parts[2]}" else key
 }
+
+/** 「9月7日 周一」格式的今日日期（中文 locale） */
+private fun formatToday(): String =
+    SimpleDateFormat("M月d日 EEEE", Locale.SIMPLIFIED_CHINESE).format(Date())
