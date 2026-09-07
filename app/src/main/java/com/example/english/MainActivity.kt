@@ -74,6 +74,8 @@ sealed class Screen {
 
 class MainActivity : ComponentActivity() {
     private lateinit var speechService: SpeechService
+    // 发音训练专用：英语专项识别 AppKey
+    private lateinit var englishSpeechService: SpeechService
     private lateinit var updateManager: UpdateManager
 
     private val requestPermissionLauncher =
@@ -86,6 +88,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         speechService = SpeechService(this)
+        englishSpeechService = SpeechService(this, SpeechService.APP_KEY_ENGLISH)
         updateManager = UpdateManager(this)
         enableEdgeToEdge()
 
@@ -335,18 +338,21 @@ class MainActivity : ComponentActivity() {
                     is Screen.DictationPage -> TrainingPage(
                         mode = TrainingMode.Dictation,
                         speechService = speechService,
+                        englishSpeechService = englishSpeechService,
                         onBack = backToStudy,
                         onTrainingCompleted = { mode -> markTrainingDone(taskStore, mode) }
                     )
                     is Screen.PronunciationPage -> TrainingPage(
                         mode = TrainingMode.Pronunciation,
                         speechService = speechService,
+                        englishSpeechService = englishSpeechService,
                         onBack = backToStudy,
                         onTrainingCompleted = { mode -> markTrainingDone(taskStore, mode) }
                     )
                     is Screen.MeaningPage -> TrainingPage(
                         mode = TrainingMode.Meaning,
                         speechService = speechService,
+                        englishSpeechService = englishSpeechService,
                         onBack = backToStudy,
                         onTrainingCompleted = { mode -> markTrainingDone(taskStore, mode) }
                     )
@@ -378,6 +384,7 @@ private fun markTrainingDone(store: DailyTaskStore, mode: TrainingMode) {
 private fun TrainingPage(
     mode: TrainingMode,
     speechService: SpeechService,
+    englishSpeechService: SpeechService,
     onBack: () -> Unit,
     onTrainingCompleted: (TrainingMode) -> Unit = {}
 ) {
@@ -391,6 +398,7 @@ private fun TrainingPage(
         words = trainingWords,
         initialIndex = progressStore.getIndex(mode.name),
         speechService = speechService,
+        englishSpeechService = englishSpeechService,
         onProgressChange = { index -> progressStore.saveIndex(mode.name, index, trainingWords.size) },
         onBack = onBack,
         onTrainingCompleted = {

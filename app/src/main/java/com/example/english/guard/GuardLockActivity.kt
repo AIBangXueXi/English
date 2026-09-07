@@ -521,6 +521,7 @@ private fun ReviewFlow(
                 HoldToSpeakButton(
                     enabled = hasMicPermission && !checking,
                     label = "读一遍",
+                    english = true,
                     onResult = { text ->
                         checking = true
                         if (isReadMatch(word.word, text)) {
@@ -576,11 +577,18 @@ private fun HoldToSpeakButton(
     enabled: Boolean,
     label: String,
     onResult: (String) -> Unit,
-    onError: (String) -> Unit
+    onError: (String) -> Unit,
+    /** true = 识别英文（读单词）；false = 识别中文（说意思） */
+    english: Boolean = false
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val speech = remember { SpeechService(context) }
+    val speech = remember(english) {
+        SpeechService(
+            context,
+            if (english) SpeechService.APP_KEY_ENGLISH else SpeechService.DEFAULT_APP_KEY
+        )
+    }
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     var busy by remember { mutableStateOf(false) }
@@ -608,7 +616,8 @@ private fun HoldToSpeakButton(
         }
     }
 
-    DisposableEffect(Unit) { onDispose { speech.cleanup() } }
+    // key 用 speech：中英文 key 切换时旧实例能被及时释放
+    DisposableEffect(speech) { onDispose { speech.cleanup() } }
 
     Button(
         onClick = {},

@@ -17,7 +17,17 @@ import java.io.FileOutputStream
 import java.io.OutputStream
 import javax.net.ssl.HttpsURLConnection
 
-class SpeechService(private val context: Context) {
+/**
+ * 阿里云一句话识别。
+ *
+ * [appKey]：项目 AppKey，决定识别模型。
+ * - [DEFAULT_APP_KEY]：通用（中文）识别，用于「说意思」这类中文输入
+ * - [APP_KEY_ENGLISH]：英语专项识别，用于发音训练、管控锁屏「读一遍」等读单词场景
+ */
+class SpeechService(
+    private val context: Context,
+    private val appKey: String = DEFAULT_APP_KEY
+) {
     private var audioRecord: AudioRecord? = null
     private var recordingThread: Thread? = null
     @Volatile var isRecording = false
@@ -31,7 +41,12 @@ class SpeechService(private val context: Context) {
 
     companion object {
         private const val TAG = "SpeechService"
-        private const val APP_KEY = "***REMOVED***"
+
+        /** 通用（中文）识别 */
+        const val DEFAULT_APP_KEY = "***REMOVED***"
+        /** 英语专项识别：发音训练专用，对英文单词识别更准 */
+        const val APP_KEY_ENGLISH = "***REMOVED***"
+
         private const val ASR_ENDPOINT = "https://nls-gateway.cn-shanghai.aliyuncs.com/stream/v1/asr"
         private const val SAMPLE_RATE = 16000
         private const val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
@@ -140,7 +155,7 @@ class SpeechService(private val context: Context) {
             val token = TokenGenerator.getToken()
             Log.d(TAG, "Got token: ${token.take(10)}...")
 
-            val url = java.net.URL("$ASR_ENDPOINT?appkey=$APP_KEY&format=pcm&sample_rate=$SAMPLE_RATE&enable_intermediate_result=false")
+            val url = java.net.URL("$ASR_ENDPOINT?appkey=$appKey&format=pcm&sample_rate=$SAMPLE_RATE&enable_intermediate_result=false")
             val conn = url.openConnection() as HttpsURLConnection
             conn.requestMethod = "POST"
             conn.setRequestProperty("X-NLS-Token", token)

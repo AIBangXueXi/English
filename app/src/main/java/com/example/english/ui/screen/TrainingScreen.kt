@@ -124,9 +124,14 @@ fun TrainingScreen(
     onBack: () -> Unit,
     onTrainingCompleted: (TrainingMode) -> Unit = {},
     initialIndex: Int = 0,
-    onProgressChange: (Int) -> Unit = {}
+    onProgressChange: (Int) -> Unit = {},
+    /** 英语专项识别服务：发音训练读单词时用，识别英文更准 */
+    englishSpeechService: SpeechService = speechService
 ) {
     val context = LocalContext.current
+    // 发音训练读的是英文单词，走英语专项 AppKey；意思训练说中文，仍用通用 Key
+    val activeSpeechService =
+        if (mode == TrainingMode.Pronunciation) englishSpeechService else speechService
     val scope = rememberCoroutineScope()
     var index by remember { mutableIntStateOf(0) }
     // 恢复上次训练进度：等词表加载完成后再定位到合法下标
@@ -250,7 +255,7 @@ fun TrainingScreen(
             errorMessage = null
             hasPcmData = false
             try {
-                speechService.startRecording()
+                activeSpeechService.startRecording()
             } catch (e: Exception) {
                 hasActiveRecording = false
                 isRecording = false
@@ -261,7 +266,7 @@ fun TrainingScreen(
             isRecording = false
             isProcessing = true
             scope.launch {
-                val result = speechService.stopAndRecognize()
+                val result = activeSpeechService.stopAndRecognize()
                 result.onSuccess { text ->
                     recognizedText = text
                     val direct = when (mode) {
@@ -288,7 +293,7 @@ fun TrainingScreen(
                         playErrorSound(context)
                     }
                 }.onFailure { e -> errorMessage = e.message }
-                hasPcmData = speechService.lastPcmData != null
+                hasPcmData = activeSpeechService.lastPcmData != null
                 isProcessing = false
             }
         }
@@ -567,7 +572,7 @@ fun TrainingScreen(
                                             onPlay = {
                                                 isPlaying = true
                                                 playJob = scope.launch {
-                                                    playPcm(speechService.lastPcmData)
+                                                    playPcm(activeSpeechService.lastPcmData)
                                                     isPlaying = false
                                                 }
                                             },
