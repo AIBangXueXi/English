@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Remove
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -24,12 +25,16 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedIconButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -185,6 +190,15 @@ fun SettingsScreen(
             var guardPackages by remember { mutableStateOf(guardStore.packages) }
             var serviceEnabled by remember { mutableStateOf(EnGuardService.isServiceEnabled(context)) }
 
+            // 娱乐管控需要家长密码解锁后才展示（默认密码 88888888）
+            var guardUnlocked by remember { mutableStateOf(false) }
+            var passwordInput by remember { mutableStateOf("") }
+            var passwordError by remember { mutableStateOf(false) }
+            var showChangePassword by remember { mutableStateOf(false) }
+            var newPassword by remember { mutableStateOf("") }
+            var confirmPassword by remember { mutableStateOf("") }
+            var changePasswordError by remember { mutableStateOf<String?>(null) }
+
             // 从系统无障碍设置页返回时刷新服务状态
             LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
                 serviceEnabled = EnGuardService.isServiceEnabled(context)
@@ -242,6 +256,53 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(modifier = Modifier.height(8.dp))
+
+                    if (!guardUnlocked) {
+                        Text(
+                            text = "该设置受家长密码保护，输入密码后可见。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedTextField(
+                            value = passwordInput,
+                            onValueChange = {
+                                passwordInput = it
+                                passwordError = false
+                            },
+                            label = { Text("家长密码") },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                            isError = passwordError,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        if (passwordError) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "密码错误，请重新输入",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = {
+                                if (guardStore.isPasswordCorrect(passwordInput)) {
+                                    guardUnlocked = true
+                                    passwordInput = ""
+                                    passwordError = false
+                                } else {
+                                    passwordError = true
+                                }
+                            },
+                            enabled = passwordInput.isNotBlank(),
+                            modifier = Modifier.fillMaxWidth().height(44.dp),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Text("解锁")
+                        }
+                    } else {
                     Text(
                         text = "开启无障碍服务后，在被管控的应用中累计使用达到触发时长，就会自动弹出今天找到的生词，依次「说意思 → 拼写 → 读一遍」，全部完成才解锁继续使用。复习数量按上方「每日发现不认识单词数量」取值。",
                         style = MaterialTheme.typography.bodySmall,
@@ -390,6 +451,99 @@ fun SettingsScreen(
                         shape = RoundedCornerShape(14.dp)
                     ) {
                         Text("预览复习锁屏", fontSize = 15.sp)
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(onClick = { showChangePassword = true }) {
+                            Text("修改密码")
+                        }
+                        TextButton(
+                            onClick = {
+                                guardUnlocked = false
+                                passwordInput = ""
+                                passwordError = false
+                            }
+                        ) {
+                            Text("重新锁定")
+                        }
+                    }
+
+                    if (showChangePassword) {
+                        AlertDialog(
+                            onDismissRequest = {
+                                showChangePassword = false
+                                newPassword = ""
+                                confirmPassword = ""
+                                changePasswordError = null
+                            },
+                            title = { Text("修改家长密码") },
+                            text = {
+                                Column {
+                                    OutlinedTextField(
+                                        value = newPassword,
+                                        onValueChange = { newPassword = it; changePasswordError = null },
+                                        label = { Text("新密码") },
+                                        singleLine = true,
+                                        visualTransformation = PasswordVisualTransformation(),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword)
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    OutlinedTextField(
+                                        value = confirmPassword,
+                                        onValueChange = { confirmPassword = it; changePasswordError = null },
+                                        label = { Text("确认新密码") },
+                                        singleLine = true,
+                                        visualTransformation = PasswordVisualTransformation(),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword)
+                                    )
+                                    if (changePasswordError != null) {
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = changePasswordError!!,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.error
+                                        )
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(
+                                    onClick = {
+                                        when {
+                                            newPassword.isBlank() -> changePasswordError = "密码不能为空"
+                                            newPassword != confirmPassword -> changePasswordError = "两次输入的密码不一致"
+                                            else -> {
+                                                guardStore.password = newPassword
+                                                showChangePassword = false
+                                                newPassword = ""
+                                                confirmPassword = ""
+                                                changePasswordError = null
+                                            }
+                                        }
+                                    }
+                                ) {
+                                    Text("确定")
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(
+                                    onClick = {
+                                        showChangePassword = false
+                                        newPassword = ""
+                                        confirmPassword = ""
+                                        changePasswordError = null
+                                    }
+                                ) {
+                                    Text("取消")
+                                }
+                            }
+                        )
+                    }
                     }
                 }
             }

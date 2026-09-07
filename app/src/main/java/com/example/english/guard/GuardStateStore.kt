@@ -30,6 +30,10 @@ class GuardStateStore(context: Context) {
         /** 默认管控的 app（抖音 + 抖音极速版） */
         const val DEFAULT_PACKAGES = "com.ss.android.ugc.aweme,com.ss.android.ugc.aweme.lite"
 
+        /** 家长密码默认值：进入「娱乐管控」设置需输入密码 */
+        const val DEFAULT_PASSWORD = "88888888"
+
+        private const val KEY_PASSWORD = "password"
         private const val KEY_DATE = "date"
         private const val KEY_SECONDS = "seconds"
         private const val KEY_LOCKED = "locked"
@@ -62,6 +66,17 @@ class GuardStateStore(context: Context) {
         set(value) {
             prefs.edit().putString(KEY_PACKAGES, value.joinToString(",")).apply()
         }
+
+    /** 家长密码（默认 [DEFAULT_PASSWORD]） */
+    var password: String
+        get() = prefs.getString(KEY_PASSWORD, DEFAULT_PASSWORD) ?: DEFAULT_PASSWORD
+        set(value) {
+            val v = value.trim()
+            if (v.isBlank()) return
+            prefs.edit().putString(KEY_PASSWORD, v).apply()
+        }
+
+    fun isPasswordCorrect(input: String): Boolean = input.trim() == password
 
     fun addPackage(pkg: String) {
         if (pkg.isBlank()) return
