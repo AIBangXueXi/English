@@ -6,6 +6,15 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <!-- Android 11+ 包可见性：让 pm.queryIntentActivities(ACTION_MAIN + CATEGORY_LAUNCHER) 
+         能列出所有可启动应用，否则在荣耀/华为/小米等 Android 11+ 设备上「添加管控应用」列表会空。 -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
