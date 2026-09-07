@@ -60,7 +60,10 @@ fun SettingsScreen(
     var dailyLimit by remember { mutableIntStateOf(repository.getDailyUnknownLimit()) }
 
     fun updateLimit(delta: Int) {
-        val next = (dailyLimit + delta).coerceIn(5, 50)
+        val next = (dailyLimit + delta).coerceIn(
+            WordRepository.DAILY_LIMIT_MIN,
+            WordRepository.DAILY_LIMIT_MAX
+        )
         dailyLimit = next
         repository.setDailyUnknownLimit(next)
     }
@@ -112,7 +115,7 @@ fun SettingsScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "在背单词过程中，把不认识的单词标记为“不认识”。每天标记的数量达到该值后，会提示今日学习任务完成。",
+                        text = "在背单词过程中，把不认识的单词标记为“不认识”。每天标记的数量达到该值后，会提示今日学习任务完成。可在 ${WordRepository.DAILY_LIMIT_MIN} ~ ${WordRepository.DAILY_LIMIT_MAX} 个之间调整。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -125,8 +128,8 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         OutlinedIconButton(
-                            onClick = { updateLimit(-5) },
-                            enabled = dailyLimit > 5
+                            onClick = { updateLimit(-1) },
+                            enabled = dailyLimit > WordRepository.DAILY_LIMIT_MIN
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.Remove,
@@ -145,8 +148,8 @@ fun SettingsScreen(
                         )
                         Spacer(modifier = Modifier.size(24.dp))
                         OutlinedIconButton(
-                            onClick = { updateLimit(5) },
-                            enabled = dailyLimit < 50
+                            onClick = { updateLimit(1) },
+                            enabled = dailyLimit < WordRepository.DAILY_LIMIT_MAX
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.Add,

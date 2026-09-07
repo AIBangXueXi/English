@@ -215,17 +215,20 @@ class WordRepository(context: Context) {
     private val taskStore = DailyTaskStore(appContext)
 
     /** 每日发现不认识单词相关偏好键 */
-    private companion object {
-        const val KEY_DAILY_UNKNOWN_LIMIT = "daily_unknown_found_limit"
-        const val KEY_DAILY_UNKNOWN_DATE = "daily_unknown_found_date"
-        const val KEY_DAILY_UNKNOWN_COUNT = "daily_unknown_found_count"
-        const val DEFAULT_DAILY_UNKNOWN_LIMIT = 5
-        const val DAILY_LIMIT_MIN = 5
+    companion object {
+        /** 默认每日目标：3 个 */
+        const val DEFAULT_DAILY_UNKNOWN_LIMIT = 3
+        /** 每日目标下限，与默认值一致——默认 3 个起，只能往上调 */
+        const val DAILY_LIMIT_MIN = 3
         const val DAILY_LIMIT_MAX = 50
 
+        private const val KEY_DAILY_UNKNOWN_LIMIT = "daily_unknown_found_limit"
+        private const val KEY_DAILY_UNKNOWN_DATE = "daily_unknown_found_date"
+        private const val KEY_DAILY_UNKNOWN_COUNT = "daily_unknown_found_count"
+
         // 连续两天答对才转认识的机制（背单词复习）
-        const val CONSECUTIVE_DAYS_REQUIRED = 2
-        const val ONE_DAY_MS = 24 * 60 * 60 * 1000L
+        private const val CONSECUTIVE_DAYS_REQUIRED = 2
+        private const val ONE_DAY_MS = 24 * 60 * 60 * 1000L
     }
 
     /** 每日发现（标记）不认识单词的数量上限，达到后今日学习任务完成 */
