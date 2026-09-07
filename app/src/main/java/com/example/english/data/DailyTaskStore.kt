@@ -19,7 +19,9 @@ data class DailyTask(
     val moErSeconds: Int = 0,
     val dictationDone: Boolean = false,
     val pronunciationDone: Boolean = false,
-    val meaningDone: Boolean = false
+    val meaningDone: Boolean = false,
+    /** 今天找到的不认识单词（供桌面 Widget 展示） */
+    val unknownWords: List<String> = emptyList()
 ) {
     fun completedCount(unknownLimit: Int): Int {
         var c = 0
@@ -54,7 +56,9 @@ class DailyTaskStore(context: Context) {
         prefs.edit().putString(key, gson.toJson(updated)).apply()
     }
 
-    fun recordUnknownFound() = updateToday { it.copy(unknownFound = it.unknownFound + 1) }
+    fun recordUnknownFound(word: String) = updateToday {
+        it.copy(unknownFound = it.unknownFound + 1, unknownWords = it.unknownWords + word)
+    }
 
     fun recordMoErSecond() = updateToday { it.copy(moErSeconds = it.moErSeconds + 1) }
 
@@ -80,7 +84,10 @@ class DailyTaskStore(context: Context) {
     private fun read(key: String): DailyTask {
         val json = prefs.getString(key, null) ?: return DailyTask()
         return try {
-            gson.fromJson(json, DailyTask::class.java) ?: DailyTask()
+            // Gson 通过反射构造对象时不走默认参数，旧版本 JSON 缺 unknownWords 字段会得到 null，这里兜底
+            val task = gson.fromJson(json, DailyTask::class.java) ?: return DailyTask()
+            @Suppress("SENSELESS_COMPARISON")
+            if (task.unknownWords == null) task.copy(unknownWords = emptyList()) else task
         } catch (_: Exception) {
             DailyTask()
         }

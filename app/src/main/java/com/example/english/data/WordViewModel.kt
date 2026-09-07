@@ -137,7 +137,7 @@ class WordViewModel(application: Application) : AndroidViewModel(application) {
                     repository.addToUnknown(apiWord)
                     repository.advanceSeq(1)
                     // 新词被标记为不认识：计入今日发现数，达到上限则今日任务完成
-                    if (repository.recordUnknownFoundAndCheckDone()) {
+                    if (repository.recordUnknownFoundAndCheckDone(apiWord.word)) {
                         _state.value = QuizState.DailyComplete
                         return@launch
                     }

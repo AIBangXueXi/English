@@ -206,12 +206,13 @@ suspend fun playAudioAwait(
 }
 
 class WordRepository(context: Context) {
-    private val db = AppDatabase.getInstance(context)
+    private val appContext = context.applicationContext
+    private val db = AppDatabase.getInstance(appContext)
     private val knownDao = db.knownWordDao()
     private val unknownDao = db.unknownWordDao()
-    private val prefs = context.getSharedPreferences("english_seq", Context.MODE_PRIVATE)
+    private val prefs = appContext.getSharedPreferences("english_seq", Context.MODE_PRIVATE)
     private val gson = Gson()
-    private val taskStore = DailyTaskStore(context)
+    private val taskStore = DailyTaskStore(appContext)
 
     /** 每日发现不认识单词相关偏好键 */
     private companion object {
@@ -253,8 +254,9 @@ class WordRepository(context: Context) {
     /**
      * 记录一个新发现的不认识单词，返回今日任务是否因此完成。
      * 只在背单词过程中新词被标记为“不认识”时调用（复习词不算）。
+     * [word] 单词文本，同步存入今日生词列表供桌面 Widget 展示。
      */
-    fun recordUnknownFoundAndCheckDone(): Boolean {
+    fun recordUnknownFoundAndCheckDone(word: String): Boolean {
         val today = todayKey()
         val storedDate = prefs.getString(KEY_DAILY_UNKNOWN_DATE, "") ?: ""
         val count = if (storedDate == today) prefs.getInt(KEY_DAILY_UNKNOWN_COUNT, 0) else 0
@@ -263,8 +265,10 @@ class WordRepository(context: Context) {
             .putString(KEY_DAILY_UNKNOWN_DATE, today)
             .putInt(KEY_DAILY_UNKNOWN_COUNT, newCount)
             .apply()
-        // 同步记录到每日任务存储（用于首页任务/历史展示）
-        taskStore.recordUnknownFound()
+        // 同步记录到每日任务存储（用于首页任务/历史展示 + Widget 生词列表）
+        taskStore.recordUnknownFound(word)
+        // Widget 可能正处于“已解锁”状态展示今日生词，刷新一下
+        com.example.english.widget.UnknownWordWidgetProvider.refreshAll(appContext)
         return newCount >= getDailyUnknownLimit()
     }
 
@@ -362,6 +366,12 @@ class WordRepository(context: Context) {
 
     suspend fun getKnownWords(): List<KnownWord> = withContext(Dispatchers.IO) { knownDao.getAll() }
     suspend fun getUnknownWords(): List<UnknownWord> = withContext(Dispatchers.IO) { unknownDao.getAll() }
+
+    /** 按单词文本批量取生词实体：锁屏复习用「今天找到的生词」文本反查详情。 */
+    suspend fun getUnknownWordsByText(words: List<String>): List<UnknownWord> =
+        withContext(Dispatchers.IO) {
+            if (words.isEmpty()) emptyList() else unknownDao.getByWords(words).distinctBy { it.word }
+        }
     suspend fun deleteKnownWord(id: Long) = withContext(Dispatchers.IO) { knownDao.deleteById(id) }
     suspend fun deleteUnknownWord(id: Long) = withContext(Dispatchers.IO) { unknownDao.deleteById(id) }
 

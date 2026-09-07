@@ -1,3 +1,8 @@
 <resources>
     <string name="app_name">English</string>
+    <string name="widget_unknown_word_title">今日生词</string>
+    <string name="widget_unknown_word_label">今日生词</string>
+    <string name="widget_unknown_word_description">上滑（点击）5 次查看今天找到的不认识单词</string>
+    <string name="guard_service_label">刷视频管控</string>
+    <string name="guard_accessibility_description">用于统计在抖音中刷过的视频数量，达到设定个数后弹出单词复习，帮助孩子边刷视频边背单词。本服务仅读取当前窗口的内容用于计数，不会上传任何数据。</string>
 </resources>

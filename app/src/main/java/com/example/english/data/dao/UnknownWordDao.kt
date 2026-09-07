@@ -26,6 +26,10 @@ interface UnknownWordDao {
     @Query("SELECT * FROM unknown_words ORDER BY id DESC")
     suspend fun getAll(): List<UnknownWord>
 
+    /** 按单词文本批量取生词实体（供锁屏复习取“今天找到的生词”详情） */
+    @Query("SELECT * FROM unknown_words WHERE word IN (:words) ORDER BY id ASC")
+    suspend fun getByWords(words: List<String>): List<UnknownWord>
+
     @Query("DELETE FROM unknown_words WHERE id = :id")
     suspend fun deleteById(id: Long)
 
