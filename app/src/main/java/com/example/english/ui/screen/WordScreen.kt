@@ -99,6 +99,7 @@ import com.example.english.data.QuizState
 import com.example.english.data.WordViewModel
 import com.example.english.data.api.DeepSeekService
 import com.example.english.speech.SpeechService
+import com.example.english.data.resolveAudioSource
 import com.example.english.data.resolveRawResId
 import com.example.english.data.resolveStaticUrl
 import com.example.english.data.playAudioAwait
@@ -1543,22 +1544,39 @@ internal fun playErrorSound(context: Context) {
 internal suspend fun playPronunciation(context: Context, source: String): Boolean = withContext(Dispatchers.IO) {
     try {
         Log.d("EnglishApp", "playPronunciation: source=$source")
-        val mp = if (source.startsWith("raw:", ignoreCase = true)) {
-            val resId = resolveRawResId(context, source)
+        // DB 里存的是相对路径 (/bxx/uploads/voices/xxx.wav) 或 "raw:<resName>"。
+        // 直接 URL(source) 会抛 MalformedURLException: no protocol，这里统一拼 base URL。
+        // resolveAudioSource 已经处理 raw: 前缀（保留原样）和绝对 URL（保留原样）。
+        val resolved = resolveAudioSource(source)
+
+        // 单一 owner 原则：主循环是 MediaPlayer / tempFile 的唯一所有者。
+        // listener 只负责把 finished 置 true，不在这里 release mp / 删除 tempFile，
+        // 否则播放完会变成"listener release 一次 + 主循环 release 一次"的双重释放竞争，
+        // 主循环下一次 delay 醒来时 mp.isPlaying() 在已 release 的 MediaPlayer 上抛 IllegalStateException。
+        val finished = java.util.concurrent.atomic.AtomicBoolean(false)
+        var tempFile: java.io.File? = null
+
+        val mp = if (resolved.startsWith("raw:", ignoreCase = true)) {
+            val resId = resolveRawResId(context, resolved)
             if (resId == 0) return@withContext false
-            MediaPlayer.create(context, resId) ?: return@withContext false
+            (MediaPlayer.create(context, resId) ?: return@withContext false).apply {
+                setOnCompletionListener { finished.set(true) }
+                setOnErrorListener { _, _, _ -> finished.set(true); true }
+                start()
+            }
         } else {
             // Download to temp file first to avoid HTTPS issues on some devices (e.g. OPPO)
-            val tempFile = java.io.File(context.cacheDir, "pron_${System.currentTimeMillis()}.wav")
+            val f = java.io.File(context.cacheDir, "pron_${System.currentTimeMillis()}.wav")
+            tempFile = f
             try {
-                val conn = java.net.URL(source).openConnection() as java.net.HttpURLConnection
+                val conn = java.net.URL(resolved).openConnection() as java.net.HttpURLConnection
                 conn.setRequestProperty("User-Agent", "EnglishApp")
                 conn.connectTimeout = 10000
                 conn.readTimeout = 10000
                 conn.connect()
                 if (conn.responseCode == 200) {
                     conn.inputStream.use { input ->
-                        tempFile.outputStream().use { output -> input.copyTo(output) }
+                        f.outputStream().use { output -> input.copyTo(output) }
                     }
                 } else {
                     Log.e("EnglishApp", "Download failed: HTTP ${conn.responseCode}")
@@ -1576,27 +1594,21 @@ internal suspend fun playPronunciation(context: Context, source: String): Boolea
                         .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                         .build()
                 )
-                setDataSource(tempFile.absolutePath)
-                setOnCompletionListener {
-                    it.release()
-                    tempFile.delete()
-                }
-                setOnErrorListener { m, _, _ ->
-                    m.release()
-                    tempFile.delete()
-                    true
-                }
+                setDataSource(f.absolutePath)
+                setOnCompletionListener { finished.set(true) }
+                setOnErrorListener { _, _, _ -> finished.set(true); true }
                 prepare()
                 start()
             }
         }
-        if (source.startsWith("raw:", ignoreCase = true)) {
-            mp.setOnCompletionListener { it.release() }
-            mp.setOnErrorListener { m, _, _ -> m.release(); true }
-            mp.start()
+
+        // 阻塞直到播放自然结束或协程被取消；listener 只设 finished，不 release。
+        // 不再调用 mp.isPlaying()，避开 IllegalStateException。
+        while (isActive && !finished.get()) {
+            delay(200)
         }
-        while (isActive && mp.isPlaying) { delay(300) }
         try { mp.release() } catch (_: Exception) {}
+        tempFile?.let { runCatching { it.delete() } }
         true
     } catch (e: Exception) {
         Log.e("EnglishApp", "playPronunciation failed: source=$source", e)

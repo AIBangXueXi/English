@@ -1,9 +1,15 @@
 package com.example.english.guard
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
+import android.media.MediaPlayer
 import android.os.Bundle
+import android.util.Log
+import android.widget.Toast
+import java.io.File
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -12,8 +18,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,6 +40,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -61,8 +69,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -84,7 +94,9 @@ import com.example.english.ui.screen.playErrorSound
 import com.example.english.ui.screen.playPronunciation
 import com.example.english.ui.screen.playSuccessSound
 import com.example.english.ui.theme.EnglishTheme
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
@@ -134,10 +146,18 @@ fun GuardLockScreen(onFinish: () -> Unit) {
 
     LaunchedEffect(Unit) {
         if (!hasMicPermission) permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        // 取今天学到的所有不认识单词并去重。
+        // 注意：这里不再用 dailyUnknownLimit 截断——
+        // 管控复习是「把今天学的不认识单词全部过一遍」，与「每日发现数量上限」（背单词时
+        // 的新词配额）是两个独立维度，不能混用；否则今天找到 8 个生词但 limit=3，会被截掉
+        // 后面 5 个，复习流程永远过不完。
+        // 「不要记录进度，每次触发都从头开始」靠：
+        //   1. reviewFlow 的 index/stage 用 remember（不持久化），Activity finish 即丢；
+        //   2. 复习完一遍 unlockAndReset → finish()；下次 10 分钟阈值到了 EnGuardService
+        //      重新启动 GuardLockActivity，LaunchedEffect(Unit) 重新加载并从 index=0 开始。
+        // 「不限次数」靠：每次触发就是一次从头复习，复习完即解锁，无须计数也无须冷却。
         val todayWords = DailyTaskStore(context).getToday().unknownWords.distinct()
-        // 复习数量跟随用户在「每日发现不认识单词数量」设置项（默认 3，可调到 50）
-        val reviewCount = repository.getDailyUnknownLimit()
-        words = repository.getUnknownWordsByText(todayWords).take(reviewCount)
+        words = repository.getUnknownWordsByText(todayWords)
         loading = false
     }
 
@@ -149,17 +169,17 @@ fun GuardLockScreen(onFinish: () -> Unit) {
             TopAppBar(title = { Text("娱乐管控") })
         }
     ) { innerPadding ->
+        // 注意：外层 Column 不要 .verticalScroll —— 否则会把高度约束解绑成 Infinity，
+        // 内层 ReviewFlow 里又有一个 verticalScroll Column，会被 Compose 1.5+ 检测到
+        // 「嵌套垂直滚动」直接抛 IllegalStateException。
+        // loading / NoWordsToday 本身不滚动；ReviewFlow 内部已经自带滚动 + 底部固定区。
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 20.dp)
-                .verticalScroll(rememberScrollState())
                 .imePadding(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(12.dp))
-
             when {
                 loading -> {
                     Spacer(modifier = Modifier.height(60.dp))
@@ -188,8 +208,6 @@ fun GuardLockScreen(onFinish: () -> Unit) {
                     }
                 )
             }
-
-            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
@@ -243,6 +261,25 @@ private fun ReviewFlow(
     var celebrating by remember { mutableStateOf(false) }
     var meaningRevealed by remember { mutableStateOf(false) }
 
+    // 最近一次录音识别的结果 + 录音文件（仅在 MEANING / READ stage 持有）。
+    // advance() 切到下一 stage 时清空；切换单词由 advance() 兜底；stage 切换时
+    // SpeechService 实例重建（remember(english) 触发），所以 wavFile 也需要清空。
+    var lastRecognizedText by remember { mutableStateOf<String?>(null) }
+    var lastRecordingFile by remember { mutableStateOf<File?>(null) }
+    var recordingPlaybackJob by remember { mutableStateOf<Job?>(null) }
+
+    fun startRecordingPlayback(file: File) {
+        // 同一时刻只允许一段录音回放：开始新的回放前取消旧的，避免与新录的麦克风信号混音。
+        recordingPlaybackJob?.cancel()
+        recordingPlaybackJob = scope.launch {
+            try {
+                playRecordingFile(context, file)
+            } finally {
+                recordingPlaybackJob = null
+            }
+        }
+    }
+
     val word = words.getOrNull(index)
 
     fun advance() {
@@ -253,6 +290,8 @@ private fun ReviewFlow(
         manualInput = ""
         hint = null
         meaningRevealed = false
+        lastRecognizedText = null
+        lastRecordingFile = null
         if (index + 1 >= words.size) {
             stage = LockStage.DONE
         } else {
@@ -262,8 +301,12 @@ private fun ReviewFlow(
     }
 
     if (word == null || stage == LockStage.DONE) {
+        // 全部完成视图：放在 scrollable Column 里，跟单词卡片同级
         Column(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(modifier = Modifier.height(24.dp))
@@ -310,242 +353,334 @@ private fun ReviewFlow(
         }
     }
 
-    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        // 进度
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+    Box(modifier = Modifier.fillMaxSize()) {
+        // 上半部：滚动区，展示进度 / 单词卡片 / 提示
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                text = "复习 ${index + 1} / ${words.size}",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
-            )
-            Text(
-                text = when (stage) {
-                    LockStage.MEANING -> "第 1 步 · 说意思"
-                    LockStage.SPELL -> "第 2 步 · 拼写"
-                    LockStage.READ -> "第 3 步 · 读一遍"
-                    LockStage.DONE -> "完成"
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
+            Spacer(modifier = Modifier.height(12.dp))
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // 单词卡片
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-        ) {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+            // 进度
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = word.word,
-                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold)
-                    )
-                    IconButton(onClick = {
-                        scope.launch { playPronunciation(context, word.pronunciation) }
-                    }) {
-                        Icon(Icons.Rounded.VolumeUp, contentDescription = "播放发音")
+                Text(
+                    text = "复习 ${index + 1} / ${words.size}",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                )
+                Text(
+                    text = when (stage) {
+                        LockStage.MEANING -> "第 1 步 · 说意思"
+                        LockStage.SPELL -> "第 2 步 · 拼写"
+                        LockStage.READ -> "第 3 步 · 读一遍"
+                        LockStage.DONE -> "完成"
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 单词卡片
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // 拼写阶段不显示单词本身，让用户靠意思+音标回忆拼写
+                        if (stage != LockStage.SPELL) {
+                            Text(
+                                text = word.word,
+                                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold)
+                            )
+                            IconButton(onClick = {
+                                if (word.pronunciation.isBlank()) {
+                                    Toast.makeText(context, "该词暂无发音音频", Toast.LENGTH_SHORT).show()
+                                    return@IconButton
+                                }
+                                scope.launch { playPronunciation(context, word.pronunciation) }
+                            }) {
+                                Icon(Icons.Rounded.VolumeUp, contentDescription = "播放发音")
+                            }
+                        }
+                    }
+                    // 拼写阶段也不显示音标（音标本身就是拼写提示）
+                    if (word.phonetic.isNotBlank() && stage != LockStage.SPELL) {
+                        Text(
+                            text = word.phonetic,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    if (meaningRevealed) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = word.meaning,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+
+                    // 录音识别结果 + 回放录音：仅在 MEANING / READ stage（用麦克风的关卡）显示
+                    if (stage == LockStage.MEANING || stage == LockStage.READ) {
+                        lastRecognizedText?.let { text ->
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                IconButton(
+                                    onClick = { lastRecordingFile?.let { startRecordingPlayback(it) } },
+                                    enabled = lastRecordingFile != null && recordingPlaybackJob == null
+                                ) {
+                                    Icon(Icons.Rounded.PlayArrow, contentDescription = "播放录音")
+                                }
+                                Text(
+                                    text = if (recordingPlaybackJob != null) {
+                                        "▶ ${if (stage == LockStage.MEANING) "播放中：$text" else "播放中：$text"}"
+                                    } else {
+                                        "识别：$text"
+                                    },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
+
+                    // 拼写阶段：字母框（复用背单词的默写 UI）
+                    if (stage == LockStage.SPELL) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        DictationLetterBoxes(
+                            word = uiWord,
+                            spellingInput = spellingInput,
+                            onLetterClick = { focusRequester.requestFocus() }
+                        )
                     }
                 }
-                if (word.phonetic.isNotBlank()) {
-                    Text(
-                        text = word.phonetic,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                if (meaningRevealed) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = word.meaning,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        textAlign = TextAlign.Center
-                    )
-                }
-
-                // 拼写阶段：字母框（复用背单词的默写 UI）
-                if (stage == LockStage.SPELL) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    DictationLetterBoxes(
-                        word = uiWord,
-                        spellingInput = spellingInput,
-                        onLetterClick = { focusRequester.requestFocus() }
-                    )
-                }
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            hint?.let {
+                Text(
+                    text = it,
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            // 底部操作区占位（避免底部 fixed 操作区遮挡内容）
+            Spacer(modifier = Modifier.height(180.dp))
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        hint?.let {
-            Text(
-                text = it,
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.error,
-                textAlign = TextAlign.Center
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-        }
-
+        // 底部固定操作区：Stage 1 说意思 + 手动输入 / Stage 2 拼写 / Stage 3 读一遍
         when (stage) {
             LockStage.MEANING -> {
-                Text(
-                    text = "说出这个单词的中文意思",
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // 手动输入兜底：语音识别失败或没麦克风权限时也能过
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .imePadding()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    OutlinedTextField(
-                        value = manualInput,
-                        onValueChange = { manualInput = it; hint = null },
-                        modifier = Modifier.weight(1f).height(52.dp),
-                        placeholder = { Text("或手动输入意思", fontSize = 13.sp) },
-                        singleLine = true,
-                        textStyle = MaterialTheme.typography.bodyMedium
+                    Text(
+                        text = "说出这个单词的中文意思",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Button(
-                        onClick = {
-                            val input = manualInput.trim()
-                            if (input.isEmpty()) return@Button
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // 手动输入兜底：语音识别失败或没麦克风权限时也能过
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = manualInput,
+                            onValueChange = { manualInput = it; hint = null },
+                            modifier = Modifier.weight(1f).height(52.dp),
+                            placeholder = { Text("或手动输入意思", fontSize = 13.sp) },
+                            singleLine = true,
+                            textStyle = MaterialTheme.typography.bodyMedium
+                        )
+                        Button(
+                            onClick = {
+                                val input = manualInput.trim()
+                                if (input.isEmpty()) return@Button
+                                scope.launch {
+                                    checking = true
+                                    val ok = checkMeaning(input, word.meaning.trim())
+                                    checking = false
+                                    if (ok) {
+                                        hint = null
+                                        meaningRevealed = true
+                                        celebrating = true
+                                    } else {
+                                        hint = "意思不正确，再试试"
+                                        playErrorSound(context)
+                                    }
+                                }
+                            },
+                            enabled = manualInput.isNotBlank() && !checking,
+                            modifier = Modifier.height(52.dp),
+                            shape = RoundedCornerShape(14.dp)
+                        ) { Text("确认", fontSize = 14.sp) }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    HoldToSpeakButton(
+                        enabled = hasMicPermission && !checking && recordingPlaybackJob == null,
+                        label = "说意思",
+                        onResult = { text, wavFile ->
+                            lastRecognizedText = text
+                            lastRecordingFile = wavFile
                             scope.launch {
                                 checking = true
-                                val ok = checkMeaning(input, word.meaning.trim())
+                                val ok = checkMeaning(text, word.meaning.trim())
                                 checking = false
                                 if (ok) {
                                     hint = null
                                     meaningRevealed = true
                                     celebrating = true
                                 } else {
-                                    hint = "意思不正确，再试试"
+                                    hint = "没听清或意思不对，再试一次"
                                     playErrorSound(context)
                                 }
                             }
                         },
-                        enabled = manualInput.isNotBlank() && !checking,
-                        modifier = Modifier.height(52.dp),
-                        shape = RoundedCornerShape(14.dp)
-                    ) { Text("确认", fontSize = 14.sp) }
+                        onError = { message -> hint = message }
+                    )
                 }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                HoldToSpeakButton(
-                    enabled = hasMicPermission && !checking,
-                    label = "说意思",
-                    onResult = { text ->
-                        scope.launch {
-                            checking = true
-                            val ok = checkMeaning(text, word.meaning.trim())
-                            checking = false
-                            if (ok) {
-                                hint = null
-                                meaningRevealed = true
-                                celebrating = true
-                            } else {
-                                hint = "没听清或意思不对，再试一次"
-                                playErrorSound(context)
-                            }
-                        }
-                    },
-                    onError = { message -> hint = message }
-                )
             }
 
             LockStage.SPELL -> {
-                Text(
-                    text = "用键盘拼出这个单词",
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(12.dp))
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .imePadding()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "用键盘拼出这个单词",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                // 隐藏输入框：接收键盘输入，字母显示在上面的字母框
-                val letterCount = word.word.count { it.isLetter() }
-                BasicTextField(
-                    value = spellingInput,
-                    onValueChange = { raw ->
-                        spellingInput = raw.filter { it in 'a'..'z' || it in 'A'..'Z' }.take(letterCount)
-                        hint = null
-                    },
-                    modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(
-                        capitalization = KeyboardCapitalization.None,
-                        autoCorrectEnabled = false,
-                        keyboardType = KeyboardType.Ascii,
-                        imeAction = ImeAction.Done
-                    ),
-                    keyboardActions = KeyboardActions(onDone = { commitSpelling() }),
-                    decorationBox = { inner -> inner() }
-                )
+                    // 隐藏的输入框：接收键盘输入，字母显示在上面的字母框
+                    // textStyle 必须设 1sp 透明，否则 BasicTextField 默认会渲染 16sp 行高 + 焦点光标下划线
+                    val letterCount = word.word.count { it.isLetter() }
+                    BasicTextField(
+                        value = spellingInput,
+                        onValueChange = { raw ->
+                            spellingInput = raw.filter { it in 'a'..'z' || it in 'A'..'Z' }.take(letterCount)
+                            hint = null
+                        },
+                        modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
+                        singleLine = true,
+                        textStyle = TextStyle(color = Color.Transparent, fontSize = 1.sp),
+                        keyboardOptions = KeyboardOptions(
+                            capitalization = KeyboardCapitalization.None,
+                            autoCorrectEnabled = false,
+                            keyboardType = KeyboardType.Ascii,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(onDone = { commitSpelling() }),
+                        decorationBox = { inner -> inner() }
+                    )
 
-                LaunchedEffect(stage, index) {
-                    focusRequester.requestFocus()
-                    delay(150)
-                    keyboardController?.show()
+                    LaunchedEffect(stage, index) {
+                        focusRequester.requestFocus()
+                        delay(150)
+                        keyboardController?.show()
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = commitSpelling,
+                        enabled = spellingInput.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        shape = RoundedCornerShape(14.dp)
+                    ) { Text("确认", fontSize = 16.sp) }
                 }
-
-                Spacer(modifier = Modifier.height(12.dp))
-                Button(
-                    onClick = commitSpelling,
-                    enabled = spellingInput.isNotBlank(),
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                    shape = RoundedCornerShape(14.dp)
-                ) { Text("确认", fontSize = 16.sp) }
             }
 
             LockStage.READ -> {
-                Text(
-                    text = "把这个单词读一遍",
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                HoldToSpeakButton(
-                    enabled = hasMicPermission && !checking,
-                    label = "读一遍",
-                    english = true,
-                    onResult = { text ->
-                        checking = true
-                        if (isReadMatch(word.word, text)) {
-                            checking = false
-                            hint = null
-                            celebrating = true
-                        } else {
-                            checking = false
-                            hint = "读得不太准，再读一次"
-                            playErrorSound(context)
-                        }
-                    },
-                    onError = { message -> hint = message }
-                )
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "把这个单词读一遍",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    HoldToSpeakButton(
+                        enabled = hasMicPermission && !checking && recordingPlaybackJob == null,
+                        label = "读一遍",
+                        english = true,
+                        onResult = { text, wavFile ->
+                            lastRecognizedText = text
+                            lastRecordingFile = wavFile
+                            checking = true
+                            if (isReadMatch(word.word, text)) {
+                                checking = false
+                                hint = null
+                                celebrating = true
+                            } else {
+                                checking = false
+                                hint = "读得不太准，再读一次"
+                                playErrorSound(context)
+                            }
+                        },
+                        onError = { message -> hint = message }
+                    )
+                }
             }
 
             LockStage.DONE -> Unit
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
+        // 识别 / AI 校验中的 loading 指示
         if (checking) {
-            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+            CircularProgressIndicator(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 8.dp)
+                    .size(24.dp),
+                strokeWidth = 2.dp
+            )
         }
     }
 
@@ -577,7 +712,8 @@ private fun ReviewFlow(
 private fun HoldToSpeakButton(
     enabled: Boolean,
     label: String,
-    onResult: (String) -> Unit,
+    /** 识别成功后回调：第二个参数是录音对应的 WAV 文件（用于回放），可能为 null */
+    onResult: (String, File?) -> Unit,
     onError: (String) -> Unit,
     /** true = 识别英文（读单词）；false = 识别中文（说意思） */
     english: Boolean = false
@@ -590,80 +726,141 @@ private fun HoldToSpeakButton(
             if (english) SpeechService.APP_KEY_ENGLISH else SpeechService.DEFAULT_APP_KEY
         )
     }
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    var busy by remember { mutableStateOf(false) }
-    var active by remember { mutableStateOf(false) }
-
-    LaunchedEffect(isPressed) {
-        if (isPressed && enabled && !busy) {
-            active = true
-            busy = true
-            try {
-                speech.startRecording()
-            } catch (e: Exception) {
-                active = false
-                busy = false
-                onError(e.message ?: "录音启动失败")
-            }
-        } else if (!isPressed && active) {
-            active = false
-            scope.launch {
-                speech.stopAndRecognize()
-                    .onSuccess { onResult(it) }
-                    .onFailure { onError(it.message ?: "识别失败") }
-                busy = false
-            }
-        }
-    }
+    var recording by remember { mutableStateOf(false) }
 
     // key 用 speech：中英文 key 切换时旧实例能被及时释放
     DisposableEffect(speech) { onDispose { speech.cleanup() } }
 
     Button(
         onClick = {},
-        interactionSource = interactionSource,
-        enabled = enabled && !busy,
-        modifier = Modifier.fillMaxWidth().height(56.dp),
+        enabled = enabled && !recording,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .pointerInput(enabled, english) {
+                // 用 pointerInput.awaitEachGesture 直接接管 press/release，
+                // 避免 LaunchedEffect(isPressed) 在持续按住时因为 isPressed 反复变化
+                // 触发的 cancel/restart race，导致录音被中途打断。
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    if (!enabled || recording) return@awaitEachGesture
+                    recording = true
+                    try {
+                        speech.startRecording()
+                    } catch (e: Exception) {
+                        recording = false
+                        onError(e.message ?: "录音启动失败")
+                        return@awaitEachGesture
+                    }
+                    // 等待所有指针抬起
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        if (event.changes.none { it.pressed }) break
+                    }
+                    // 用户松开：停止录音并识别
+                    recording = false
+                    scope.launch {
+                        speech.stopAndRecognize()
+                            .onSuccess { onResult(it, speech.lastWavFile) }
+                            .onFailure { onError(it.message ?: "识别失败") }
+                    }
+                }
+            },
         shape = RoundedCornerShape(14.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = Color(0xFF4CAF50),
             contentColor = Color.White
         )
     ) {
-        Text(if (busy) "松开识别" else label, fontSize = 16.sp)
+        Text(if (recording) "松开识别" else label, fontSize = 16.sp)
     }
 }
 
 /** 说意思判定：先做包含匹配，不匹配再交给 AI 语义判定 */
+/**
+ * 判定用户的中文输入是否算"答对"了原意。
+ *
+ * 流程与 [WordScreen] / [TrainingScreen] 完全对齐：
+ *   1. 快速本地命中（按 ; , 、 拆多义词 token，再做子串三向匹配）
+ *   2. 快速命中失败才走 [DeepSeekService.compareMeaning]（每次 1~3s）
+ *
+ * 之所以把多义词按 token 切，是因为 DB 里 meaning 形如：
+ *   "昂贵的；贵重的" / "苹果；苹果公司"
+ * 用户常说"贵的" / "苹果"——整体 substring 命中没问题；但"value" / "不便宜"
+ * 这种同义/反义表达 substring 直接挂，必须 AI 兜底。我们通过先按 token 切分，
+ * 让本地命中覆盖更多的常见近义词片段（部分包含也算），减少不必要的 AI 调用。
+ */
 private suspend fun checkMeaning(input: String, meaning: String): Boolean {
-    if (input.isBlank() || meaning.isBlank()) return false
-    if (meaning.contains(input.trim())) return true
-    return DeepSeekService.compareMeaning(input.trim(), meaning)
+    val ans = input.trim()
+    val exp = meaning.trim()
+    if (ans.isBlank() || exp.isBlank()) return false
+    // 1. 整体三向 substring（背单词流程的快路径）
+    if (exp.contains(ans) || ans.contains(exp)) return true
+    // 2. 多义词 token 级命中：昂贵的；贵重的 → ["昂贵的", "贵重的"]
+    val tokens = exp.split('；', ';', '、', ',', '，', ' ')
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+    for (t in tokens) {
+        if (t == ans || t.contains(ans) || ans.contains(t)) return true
+    }
+    // 3. AI 兜底（不可避免的 1~3s 延迟）
+    return DeepSeekService.compareMeaning(ans, exp)
 }
 
-/** 朗读判定：归一化后完全相等 / 包含，或用最长公共子序列比例容错 ASR 识别误差 */
+/**
+ * 朗读判定：与 [TrainingScreen.isPronunciationMatch] 同款（不再使用 LCS），
+ * 避免 O(n×m) 计算带来的「按下后稍等一下」体感。
+ *
+ * 三向 contains 已能覆盖绝大部分 ASR 误差：
+ *   - 末尾多字："apples" ⊇ "apple"
+ *   - 末尾少字："appl" ⊂ "apple"
+ *   - 完全一致
+ * 极端 ASR 误差（如 "appul"）由 fail-fast + 用户重录解决，而不是用 LCS 蒙混过关。
+ */
 private fun isReadMatch(expected: String, actual: String): Boolean {
-    val e = normalizeSpoken(expected)
-    val a = normalizeSpoken(actual)
+    val e = expected.lowercase().filter { it.isLetter() }.trim()
+    val a = actual.lowercase().filter { it.isLetter() }.trim()
     if (e.isEmpty() || a.isEmpty()) return false
-    if (e == a || a.contains(e) || e.contains(a)) return true
-    val lcs = lcsLength(e, a)
-    return lcs.toFloat() / maxOf(e.length, a.length) >= 0.75f
+    return a == e || a.contains(e) || e.contains(a)
 }
 
-private fun normalizeSpoken(text: String): String =
-    text.lowercase().filter { it in 'a'..'z' }
-
-private fun lcsLength(a: String, b: String): Int {
-    val dp = IntArray(b.length + 1)
-    for (i in 1..a.length) {
-        var prev = 0
-        for (j in 1..b.length) {
-            val tmp = dp[j]
-            dp[j] = if (a[i - 1] == b[j - 1]) prev + 1 else maxOf(dp[j], dp[j - 1])
-            prev = tmp
+/**
+ * 播放用户刚才录的 WAV 文件（单次播放）。
+ *
+ * 走和 [playPronunciation]（WordScreen.kt）一样的"单一 owner"模式：
+ * - listener 只设置 `finished` 标志，不在这里 release mp
+ * - 主循环是 MediaPlayer 的唯一所有者，主循环退出后单点 `mp.release()`
+ * - 不调用 `mp.isPlaying()`，避开 IllegalStateException
+ *
+ * 调用方负责传入有效的本地 wav 文件（[SpeechService.lastWavFile]）。
+ */
+private suspend fun playRecordingFile(context: Context, file: File) =
+    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        try {
+            Log.d("EnglishApp", "playRecordingFile: ${file.absolutePath}")
+            if (!file.exists() || file.length() == 0L) {
+                Log.w("EnglishApp", "playRecordingFile: file missing or empty")
+                return@withContext
+            }
+            val finished = java.util.concurrent.atomic.AtomicBoolean(false)
+            val mp = MediaPlayer().apply {
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build()
+                )
+                setDataSource(file.absolutePath)
+                setOnCompletionListener { finished.set(true) }
+                setOnErrorListener { _, _, _ -> finished.set(true); true }
+                prepare()
+                start()
+            }
+            while (isActive && !finished.get()) {
+                delay(200)
+            }
+            try { mp.release() } catch (_: Exception) {}
+        } catch (e: Exception) {
+            Log.e("EnglishApp", "playRecordingFile failed: ${file.absolutePath}", e)
         }
     }
-    return dp[b.length]
-}

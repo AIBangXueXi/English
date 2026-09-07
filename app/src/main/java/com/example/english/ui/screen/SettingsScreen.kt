@@ -455,6 +455,16 @@ fun SettingsScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
+                    OutlinedButton(
+                        onClick = { EnGuardService.simulateTrigger(context) },
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Text("测试触发流程", fontSize = 15.sp)
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.End
