@@ -90,7 +90,7 @@ import kotlinx.coroutines.launch
 /**
  * 刷视频管控的复习锁屏。
  *
- * 规则：把今天找到的不认识单词（最多 [GuardStateStore.REVIEW_WORD_COUNT] 个）依次过三关
+ * 规则：把今天找到的不认识单词（最多 `dailyUnknownLimit` 个，可在设置里改）依次过三关
  * —— 说意思 → 拼写 → 读一遍，全部完成才解锁；今天不足 5 个就按实际数量；
  * 一个都没有则引导去 App 里背单词找生词（此时仍保持锁定，回抖音会再次弹出）。
  */
@@ -135,8 +135,9 @@ fun GuardLockScreen(onFinish: () -> Unit) {
     LaunchedEffect(Unit) {
         if (!hasMicPermission) permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
         val todayWords = DailyTaskStore(context).getToday().unknownWords.distinct()
-        words = repository.getUnknownWordsByText(todayWords)
-            .take(GuardStateStore.REVIEW_WORD_COUNT)
+        // 复习数量跟随用户在「每日发现不认识单词数量」设置项（默认 3，可调到 50）
+        val reviewCount = repository.getDailyUnknownLimit()
+        words = repository.getUnknownWordsByText(todayWords).take(reviewCount)
         loading = false
     }
 
@@ -145,7 +146,7 @@ fun GuardLockScreen(onFinish: () -> Unit) {
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("刷视频管控") })
+            TopAppBar(title = { Text("娱乐管控") })
         }
     ) { innerPadding ->
         Column(

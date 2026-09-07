@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -44,9 +45,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.app.Activity
 import android.content.Intent
+import android.graphics.drawable.Drawable
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material3.Button
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.core.graphics.drawable.toBitmap
 import com.example.english.data.WordRepository
-import com.example.english.guard.DouyinGuardService
+import com.example.english.guard.EnGuardService
+import com.example.english.guard.GuardAppPickerActivity
 import com.example.english.guard.GuardLockActivity
 import com.example.english.guard.GuardStateStore
 
@@ -165,19 +178,44 @@ fun SettingsScreen(
 
             val guardStore = remember { GuardStateStore(context) }
             var guardEnabled by remember { mutableStateOf(guardStore.enabled) }
-            var videoThreshold by remember { mutableIntStateOf(guardStore.threshold) }
-            var serviceEnabled by remember { mutableStateOf(DouyinGuardService.isServiceEnabled(context)) }
+            var guardThreshold by remember { mutableIntStateOf(guardStore.thresholdMinutes) }
+            var guardPackages by remember { mutableStateOf(guardStore.packages) }
+            var serviceEnabled by remember { mutableStateOf(EnGuardService.isServiceEnabled(context)) }
 
-            // 从系统无障碍设置页返回时刷新状态
+            // 从系统无障碍设置页返回时刷新服务状态
             LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-                serviceEnabled = DouyinGuardService.isServiceEnabled(context)
+                serviceEnabled = EnGuardService.isServiceEnabled(context)
             }
 
             fun updateThreshold(delta: Int) {
-                val next = (videoThreshold + delta)
-                    .coerceIn(GuardStateStore.MIN_THRESHOLD, GuardStateStore.MAX_THRESHOLD)
-                videoThreshold = next
-                guardStore.threshold = next
+                val next = (guardThreshold + delta)
+                    .coerceIn(
+                        GuardStateStore.MIN_THRESHOLD_MINUTES,
+                        GuardStateStore.MAX_THRESHOLD_MINUTES
+                    )
+                guardThreshold = next
+                guardStore.thresholdMinutes = next
+            }
+
+            fun addApp(pkg: String) {
+                guardPackages = guardPackages + pkg
+                guardStore.addPackage(pkg)
+            }
+
+            fun removeApp(pkg: String) {
+                guardPackages = guardPackages - pkg
+                guardStore.removePackage(pkg)
+            }
+
+            val pickerLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.StartActivityForResult()
+            ) { result ->
+                if (result.resultCode == Activity.RESULT_OK) {
+                    val pkg = result.data?.getStringExtra(
+                        GuardAppPickerActivity.RESULT_EXTRA_PACKAGE
+                    )
+                    if (!pkg.isNullOrBlank()) addApp(pkg)
+                }
             }
 
             Card(
@@ -194,7 +232,7 @@ fun SettingsScreen(
                         .padding(16.dp)
                 ) {
                     Text(
-                        text = "刷视频管控",
+                        text = "娱乐管控",
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.SemiBold
                         ),
@@ -202,7 +240,7 @@ fun SettingsScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "开启无障碍服务后，在抖音里每刷满设定个数的视频，就会自动弹出今天找到的生词，依次「说意思 → 拼写 → 读一遍」，全部完成才解锁继续刷。",
+                        text = "开启无障碍服务后，在被管控的应用中累计使用达到触发时长，就会自动弹出今天找到的生词，依次「说意思 → 拼写 → 读一遍」，全部完成才解锁继续使用。复习数量按上方「每日发现不认识单词数量」取值。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -230,6 +268,13 @@ fun SettingsScreen(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
+                    Text(
+                        text = "触发时长",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.Center,
@@ -237,7 +282,7 @@ fun SettingsScreen(
                     ) {
                         OutlinedIconButton(
                             onClick = { updateThreshold(-1) },
-                            enabled = videoThreshold > GuardStateStore.MIN_THRESHOLD
+                            enabled = guardThreshold > GuardStateStore.MIN_THRESHOLD_MINUTES
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.Remove,
@@ -247,7 +292,7 @@ fun SettingsScreen(
                         }
                         Spacer(modifier = Modifier.size(20.dp))
                         Text(
-                            text = "$videoThreshold 个视频",
+                            text = "$guardThreshold 分钟",
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold
                             ),
@@ -257,7 +302,7 @@ fun SettingsScreen(
                         Spacer(modifier = Modifier.size(20.dp))
                         OutlinedIconButton(
                             onClick = { updateThreshold(1) },
-                            enabled = videoThreshold < GuardStateStore.MAX_THRESHOLD
+                            enabled = guardThreshold < GuardStateStore.MAX_THRESHOLD_MINUTES
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.Add,
@@ -265,6 +310,50 @@ fun SettingsScreen(
                                 modifier = Modifier.size(20.dp)
                             )
                         }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "已管控应用",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    if (guardPackages.isEmpty()) {
+                        Text(
+                            text = "暂未添加任何应用",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        guardPackages.sorted().forEach { pkg ->
+                            GuardPackageRow(
+                                pkg = pkg,
+                                onRemove = { removeApp(pkg) }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Button(
+                        onClick = {
+                            val intent = Intent(context, GuardAppPickerActivity::class.java).apply {
+                                putStringArrayListExtra(
+                                    GuardAppPickerActivity.EXTRA_SELECTED_PACKAGES,
+                                    ArrayList(guardPackages)
+                                )
+                            }
+                            pickerLauncher.launch(intent)
+                        },
+                        modifier = Modifier.fillMaxWidth().height(44.dp),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.size(6.dp))
+                        Text("添加管控应用")
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -282,7 +371,7 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.error
                         )
                         TextButton(
-                            onClick = { DouyinGuardService.openAccessibilitySettings(context) }
+                            onClick = { EnGuardService.openAccessibilitySettings(context) }
                         ) {
                             Text("去开启无障碍服务")
                         }
@@ -301,6 +390,78 @@ fun SettingsScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+private data class AppItemInfo(val label: String, val icon: Drawable)
+
+/**
+ * 设置页「已管控应用」中的一行：应用图标 + 名称 + 包名 + 删除按钮。
+ * 包名查不到时（应用已卸载）展示包名原文 + 占位符，不报错。
+ */
+@Composable
+private fun GuardPackageRow(pkg: String, onRemove: () -> Unit) {
+    val context = LocalContext.current
+    val info = remember(pkg) {
+        try {
+            val pm = context.packageManager
+            val ai = pm.getApplicationInfo(pkg, 0)
+            AppItemInfo(
+                label = pm.getApplicationLabel(ai).toString(),
+                icon = pm.getApplicationIcon(ai)
+            )
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (info != null) {
+            Image(
+                bitmap = remember(pkg) { info.icon.toBitmap(80, 80).asImageBitmap() },
+                contentDescription = null,
+                modifier = Modifier.size(36.dp)
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .padding(2.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "?",
+                    fontSize = 16.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = info?.label ?: pkg,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = pkg,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 12.sp
+            )
+        }
+        IconButton(onClick = onRemove) {
+            Icon(
+                imageVector = Icons.Rounded.Delete,
+                contentDescription = "移除",
+                tint = MaterialTheme.colorScheme.error
+            )
         }
     }
 }

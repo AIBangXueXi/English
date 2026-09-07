@@ -39,7 +39,7 @@
         </activity>
 
         <service
-            android:name=".guard.DouyinGuardService"
+            android:name=".guard.EnGuardService"
             android:exported="true"
             android:label="@string/guard_service_label"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
@@ -57,6 +57,11 @@
             android:excludeFromRecents="true"
             android:launchMode="singleTop"
             android:screenOrientation="portrait"
+            android:theme="@style/Theme.English" />
+
+        <activity
+            android:name=".guard.GuardAppPickerActivity"
+            android:exported="false"
             android:theme="@style/Theme.English" />
 
         <receiver
