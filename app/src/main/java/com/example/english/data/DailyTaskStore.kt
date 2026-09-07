@@ -46,6 +46,10 @@ class DailyTaskStore(context: Context) {
 
     private val dayFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
 
+    init {
+        pruneOldRecords()
+    }
+
     fun todayKey(): String = dayFormat.format(Date())
 
     fun getToday(): DailyTask = read(todayKey())
@@ -79,6 +83,31 @@ class DailyTaskStore(context: Context) {
             result.add(key to read(key))
         }
         return result
+    }
+
+    /**
+     * 清理 [KEEP_DAYS] 天前的历史记录，避免 SharedPreferences 长期累积。
+     * 每天首次构造时执行一次；日期 key 为 yyyy-MM-dd，可直接按字符串大小比较。
+     */
+    private fun pruneOldRecords() {
+        if (prefs.getString(KEY_LAST_PRUNE, "") == todayKey()) return
+        val cal = Calendar.getInstance()
+        cal.add(Calendar.DAY_OF_YEAR, -KEEP_DAYS)
+        val threshold = dayFormat.format(cal.time)
+        val editor = prefs.edit()
+        prefs.all.keys.forEach { key ->
+            // 只匹配 yyyy-MM-dd 形式的日期 key，跳过 KEY_LAST_PRUNE 等内部标记
+            if (key.length == 10 && key[4] == '-' && key < threshold) {
+                editor.remove(key)
+            }
+        }
+        editor.putString(KEY_LAST_PRUNE, todayKey()).apply()
+    }
+
+    private companion object {
+        /** 历史记录保留天数 */
+        const val KEEP_DAYS = 30
+        const val KEY_LAST_PRUNE = "_last_prune"
     }
 
     private fun read(key: String): DailyTask {

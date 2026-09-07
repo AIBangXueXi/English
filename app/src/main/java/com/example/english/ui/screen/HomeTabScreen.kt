@@ -47,6 +47,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.LifecycleStartEffect
 import com.example.english.data.DailyTask
 import com.example.english.data.DailyTaskStore
 import com.example.english.data.MO_ER_TARGET_SECONDS
@@ -83,7 +84,15 @@ fun HomeTabScreen(
     var pronunciationPos by remember { mutableIntStateOf(0) }
     var dictationPos by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(Unit) {
+    // 每次回到前台都 +1（含 App 长期后台后跨天回到前台），驱动下方数据重新加载。
+    // 否则停在首页过夜，第二天看到的仍是昨天的任务进度。
+    var reloadToken by remember { mutableIntStateOf(0) }
+    LifecycleStartEffect(Unit) {
+        reloadToken++
+        onStopOrDispose { }
+    }
+
+    LaunchedEffect(reloadToken) {
         unknownLimit = repository.getDailyUnknownLimit()
         knownCount = repository.getKnownCount()
         unknownCount = repository.getUnknownCount()
