@@ -297,6 +297,7 @@ class MainActivity : ComponentActivity() {
                         WordScreen(
                             viewModel = wordViewModel,
                             speechService = speechService,
+                            englishSpeechService = englishSpeechService,
                             onBack = backToStudy,
                             onGoHome = backToHome
                         )

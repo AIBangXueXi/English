@@ -149,6 +149,7 @@ private val syllableColors = listOf(
 fun WordScreen(
     viewModel: WordViewModel,
     speechService: SpeechService,
+    englishSpeechService: SpeechService = speechService,
     onBack: () -> Unit,
     onGoHome: () -> Unit
 ) {
@@ -160,6 +161,7 @@ fun WordScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var hasActiveRecording by remember { mutableStateOf(false) }
     var hasPcmData by remember { mutableStateOf(false) }
+    var lastPcm by remember { mutableStateOf<ByteArray?>(null) }
     var isPlaying by remember { mutableStateOf(false) }
     var isCorrect by remember { mutableStateOf(false) }
     var showCelebration by remember { mutableStateOf(false) }
@@ -186,6 +188,11 @@ fun WordScreen(
     // 磨耳音频：点“不认识”后播放一次，播完才允许点“下一个”
     var isMoErPlaying by remember { mutableStateOf(false) }
     var moErJob by remember { mutableStateOf<Job?>(null) }
+    // 读一读：默写通过后朗读单词；readingPassed 表示朗读已通过/跳过
+    var readingPassed by remember { mutableStateOf(false) }
+    var waitingForReading by remember { mutableStateOf(false) }
+    val readingInteractionSource = remember { MutableInteractionSource() }
+    val isReadingPressed by readingInteractionSource.collectIsPressedAsState()
 
     LaunchedEffect(Unit) {
         while (isActive) {
@@ -199,6 +206,7 @@ fun WordScreen(
 
     val currentWord = (quizState as? QuizState.Active)?.word
     val isDictation = meaningPassed && !spellingPassed && !gaveUp && !waitingForDictation
+    val isReading = meaningPassed && spellingPassed && !readingPassed && !gaveUp && !waitingForReading
     LaunchedEffect(currentWord) {
         revealed = false
         isRecording = false
@@ -219,6 +227,8 @@ fun WordScreen(
         spellingInput = ""
         spellingResult = null
         waitingForDictation = false
+        readingPassed = false
+        waitingForReading = false
         isPlayingPronunciation = false
         isAiChecking = false
         isMoErPlaying = false
@@ -232,6 +242,7 @@ fun WordScreen(
             val target = currentWord?.word ?: return@LaunchedEffect
             if (spellingInput.trim().equals(target.replace(" ", ""), ignoreCase = true)) {
                 spellingPassed = true
+                waitingForReading = true
                 showCelebration = true
                 spellingResult = null
                 if (!committed) {
@@ -339,6 +350,51 @@ fun WordScreen(
                     }
                 }.onFailure { e -> errorMessage = e.message }
                 hasPcmData = speechService.lastPcmData != null
+                lastPcm = speechService.lastPcmData
+                isProcessing = false
+            }
+        }
+    }
+
+    // 读一读：按住朗读单词，松开后用英语专项识别核对发音
+    LaunchedEffect(isReadingPressed) {
+        if (!isReading || gaveUp) return@LaunchedEffect
+        val word = currentWord ?: return@LaunchedEffect
+        if (isReadingPressed && !hasActiveRecording) {
+            hasActiveRecording = true
+            isRecording = true
+            recognizedText = null
+            errorMessage = null
+            hasPcmData = false
+            isCorrect = false
+            showCelebration = false
+            showRetryHint = false
+            isAiChecking = false
+            try {
+                englishSpeechService.startRecording()
+            } catch (e: Exception) {
+                hasActiveRecording = false
+                isRecording = false
+                errorMessage = "录音启动失败: ${e.message}"
+            }
+        } else if (!isReadingPressed && hasActiveRecording) {
+            hasActiveRecording = false
+            isRecording = false
+            isProcessing = true
+            scope.launch {
+                val result = englishSpeechService.stopAndRecognize()
+                result.onSuccess { text ->
+                    recognizedText = text
+                    if (isPronunciationMatch(text, word.word)) {
+                        readingPassed = true
+                        showCelebration = true
+                    } else {
+                        showRetryHint = true
+                        playErrorSound(context)
+                    }
+                }.onFailure { e -> errorMessage = e.message }
+                hasPcmData = englishSpeechService.lastPcmData != null
+                lastPcm = englishSpeechService.lastPcmData
                 isProcessing = false
             }
         }
@@ -541,6 +597,15 @@ fun WordScreen(
                                 textAlign = TextAlign.Center
                             )
                         } else {
+                            if (isReading) {
+                                Text(
+                                    text = "第 3 步 · 读一读",
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
                             Text(
                                 text = word.word,
                                 style = MaterialTheme.typography.displaySmall.copy(
@@ -797,7 +862,7 @@ fun WordScreen(
                                     onPlay = {
                                         isPlaying = true
                                         playJob = scope.launch {
-                                            playPcm(speechService.lastPcmData)
+                                            playPcm(lastPcm)
                                             isPlaying = false
                                         }
                                     },
@@ -832,7 +897,7 @@ fun WordScreen(
                                         onPlay = {
                                             isPlaying = true
                                             playJob = scope.launch {
-                                                playPcm(speechService.lastPcmData)
+                                                playPcm(lastPcm)
                                                 isPlaying = false
                                             }
                                         },
@@ -863,6 +928,25 @@ fun WordScreen(
                             ) {
                                 Text(
                                     text = "即将进入默写…",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+
+                        meaningPassed && spellingPassed && waitingForReading -> {
+                            // 答对提示播放中：等庆祝动画/提示音结束后再进入读一读
+                            Column(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .fillMaxWidth()
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "即将进入读一读…",
                                     style = MaterialTheme.typography.titleMedium,
                                     color = MaterialTheme.colorScheme.primary,
                                     textAlign = TextAlign.Center
@@ -994,6 +1078,7 @@ fun WordScreen(
                                 if (input.isNotEmpty()) {
                                     if (input.equals(word.word.replace(" ", ""), ignoreCase = true)) {
                                         spellingPassed = true
+                                        waitingForReading = true
                                         showCelebration = true
                                         spellingResult = null
                                         if (!committed) {
@@ -1091,6 +1176,57 @@ fun WordScreen(
                             }
                         }
 
+                        isReading -> {
+                            // Stage 3: 读一读 —— 按住朗读，英语专项识别核对发音
+                            Column(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .fillMaxWidth()
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "第 3 步 · 读一读：大声读出这个单词",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Button(
+                                        onClick = { readingPassed = true },
+                                        modifier = Modifier.weight(1f).height(52.dp),
+                                        shape = RoundedCornerShape(14.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = Color(0xFF9E9E9E),
+                                            contentColor = Color.White
+                                        )
+                                    ) {
+                                        Text("跳过", fontSize = 16.sp)
+                                    }
+                                    Button(
+                                        onClick = {},
+                                        modifier = Modifier.weight(1f).height(52.dp),
+                                        interactionSource = readingInteractionSource,
+                                        shape = RoundedCornerShape(14.dp),
+                                        enabled = !isProcessing,
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = Color(0xFF4CAF50),
+                                            contentColor = Color.White,
+                                            disabledContainerColor = Color(0xFF4CAF50).copy(alpha = 0.5f),
+                                            disabledContentColor = Color.White
+                                        )
+                                    ) {
+                                        Text(if (isRecording) "松开识别" else "按住读一遍", fontSize = 16.sp)
+                                    }
+                                }
+                            }
+                        }
+
                         else -> {
                             // Both passed (or gave up) → commit and go next
                             Box(
@@ -1152,6 +1288,7 @@ fun WordScreen(
                                 onFinished = {
                                     showCelebration = false
                                     waitingForDictation = false
+                                    waitingForReading = false
                                 }
                             )
                         }
@@ -1189,6 +1326,14 @@ fun WordScreen(
             }
         )
     }
+}
+
+/** 语音识别文本与目标单词是否匹配（忽略大小写、非字母字符），用于"读一读"发音核对 */
+private fun isPronunciationMatch(spoken: String, target: String): Boolean {
+    val norm = spoken.lowercase().filter { it.isLetter() }.trim()
+    val t = target.lowercase().filter { it.isLetter() }.trim()
+    if (norm.isEmpty() || t.isEmpty()) return false
+    return norm == t || norm.contains(t) || t.contains(norm)
 }
 
 @Composable
@@ -1432,7 +1577,15 @@ internal fun RetryBanner(visible: Boolean, onFinished: () -> Unit) {
             .offset(x = shakeOffset.value.dp),
         contentAlignment = Alignment.Center
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            modifier = Modifier
+                .background(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f),
+                    shape = RoundedCornerShape(20.dp)
+                )
+                .padding(horizontal = 28.dp, vertical = 18.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
             Text(
                 text = "🤔",
                 style = MaterialTheme.typography.displaySmall.copy(fontSize = 36.sp)
