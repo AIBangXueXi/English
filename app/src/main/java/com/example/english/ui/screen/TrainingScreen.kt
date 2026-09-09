@@ -41,6 +41,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material.icons.rounded.Translate
@@ -107,7 +108,8 @@ enum class TrainingMode(
 ) {
     Dictation("默写单词", "看意思，拼写单词", Icons.Rounded.Edit),
     Pronunciation("发音训练", "看单词，跟读发音", Icons.Rounded.Mic),
-    Meaning("单词意思", "看单词，说出意思", Icons.Rounded.Translate)
+    Meaning("单词意思", "看单词，说出意思", Icons.Rounded.Translate),
+    Matching("单词对对碰", "配对单词与意思", Icons.Rounded.Extension)
 }
 
 /**
@@ -273,6 +275,7 @@ fun TrainingScreen(
                         TrainingMode.Pronunciation -> isPronunciationMatch(text, word.word)
                         TrainingMode.Meaning -> word.meaning.trim().contains(text.trim())
                         TrainingMode.Dictation -> false
+                        TrainingMode.Matching -> false
                     }
                     if (direct) {
                         markPassed()
@@ -480,6 +483,8 @@ fun TrainingScreen(
                                         )
                                     }
                                 )
+
+                                TrainingMode.Matching -> {}
                             }
 
                             // 语音识别状态区（发音训练 / 单词意思）

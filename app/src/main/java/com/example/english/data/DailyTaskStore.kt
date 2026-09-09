@@ -20,6 +20,7 @@ data class DailyTask(
     val dictationDone: Boolean = false,
     val pronunciationDone: Boolean = false,
     val meaningDone: Boolean = false,
+    val matchingDone: Boolean = false,
     /** 今天找到的不认识单词（供桌面 Widget 展示） */
     val unknownWords: List<String> = emptyList()
 ) {
@@ -30,10 +31,11 @@ data class DailyTask(
         if (dictationDone) c++
         if (pronunciationDone) c++
         if (meaningDone) c++
+        if (matchingDone) c++
         return c
     }
 
-    val totalTasks: Int get() = 5
+    val totalTasks: Int get() = 6
 }
 
 /**
@@ -71,6 +73,8 @@ class DailyTaskStore(context: Context) {
     fun markPronunciationDone() = updateToday { it.copy(pronunciationDone = true) }
 
     fun markMeaningDone() = updateToday { it.copy(meaningDone = true) }
+
+    fun markMatchingDone() = updateToday { it.copy(matchingDone = true) }
 
     /** 最近 [days] 天（含今天）的完成情况，按时间从近到远。 */
     fun getHistory(days: Int = 7): List<Pair<String, DailyTask>> {

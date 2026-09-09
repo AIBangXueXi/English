@@ -66,6 +66,6 @@ class TrainingProgressStore(context: Context) {
     companion object {
         private const val PREFS_NAME = "training_progress"
         private const val KEY_DATE = "_date"
-        private val MODE_KEYS = listOf("Meaning", "Pronunciation", "Dictation")
+        private val MODE_KEYS = listOf("Meaning", "Pronunciation", "Dictation", "Matching")
     }
 }

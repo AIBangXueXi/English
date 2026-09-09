@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Bookmarks
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.FormatQuote
 import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.Mic
@@ -63,6 +64,7 @@ fun HomeScreen(
     onDictationClick: () -> Unit = {},
     onPronunciationClick: () -> Unit = {},
     onMeaningClick: () -> Unit = {},
+    onMatchingClick: () -> Unit = {},
     onSettingsClick: () -> Unit = {},
     onCheckUpdate: () -> Unit = {},
     isCheckingUpdate: Boolean = false,
@@ -256,9 +258,9 @@ fun HomeScreen(
                     module2 = ModuleItem("发音训练", "看单词，跟读发音", Icons.Rounded.Mic, onPronunciationClick),
                 )
                 Spacer(modifier = Modifier.height(16.dp))
-                ModuleCard(
-                    item = ModuleItem("单词意思", "看单词，说出意思", Icons.Rounded.Translate, onMeaningClick),
-                    modifier = Modifier.fillMaxWidth()
+                ModuleRow(
+                    module1 = ModuleItem("单词意思", "看单词，说出意思", Icons.Rounded.Translate, onMeaningClick),
+                    module2 = ModuleItem("单词对对碰", "配对单词与意思", Icons.Rounded.Extension, onMatchingClick),
                 )
 
                 Spacer(modifier = Modifier.height(32.dp))

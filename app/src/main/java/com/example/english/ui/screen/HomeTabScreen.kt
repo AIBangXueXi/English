@@ -72,7 +72,8 @@ fun HomeTabScreen(
     onMoErTaskClick: () -> Unit = {},
     onDictationTaskClick: () -> Unit = {},
     onPronunciationTaskClick: () -> Unit = {},
-    onMeaningTaskClick: () -> Unit = {}
+    onMeaningTaskClick: () -> Unit = {},
+    onMatchingTaskClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val repository = remember { WordRepository(context) }
@@ -87,6 +88,7 @@ fun HomeTabScreen(
     var meaningPos by remember { mutableIntStateOf(0) }
     var pronunciationPos by remember { mutableIntStateOf(0) }
     var dictationPos by remember { mutableIntStateOf(0) }
+    var matchingPos by remember { mutableIntStateOf(0) }
 
     // 每次回到前台都 +1（含 App 长期后台后跨天回到前台），驱动下方数据重新加载。
     // 否则停在首页过夜，第二天看到的仍是昨天的任务进度。
@@ -105,6 +107,7 @@ fun HomeTabScreen(
         meaningPos = trainingPosition(progressStore, "Meaning", todayTask.meaningDone, unknownCount)
         pronunciationPos = trainingPosition(progressStore, "Pronunciation", todayTask.pronunciationDone, unknownCount)
         dictationPos = trainingPosition(progressStore, "Dictation", todayTask.dictationDone, unknownCount)
+        matchingPos = trainingPosition(progressStore, "Matching", todayTask.matchingDone, unknownCount)
     }
 
     val done = todayTask.completedCount(unknownLimit)
@@ -236,6 +239,13 @@ fun HomeTabScreen(
                         done = todayTask.dictationDone,
                         progress = if (unknownCount == 0) 1f else (dictationPos.toFloat() / unknownCount).coerceIn(0f, 1f),
                         onClick = onDictationTaskClick
+                    )
+                    TaskItem(
+                        title = "单词对对碰训练一遍",
+                        detail = "$matchingPos / $unknownCount",
+                        done = todayTask.matchingDone,
+                        progress = if (unknownCount == 0) 1f else (matchingPos.toFloat() / unknownCount).coerceIn(0f, 1f),
+                        onClick = onMatchingTaskClick
                     )
                     TaskItem(
                         title = "磨耳训练 15 分钟",

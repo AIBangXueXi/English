@@ -45,6 +45,7 @@ import com.example.english.ui.screen.HomeScreen
 import com.example.english.ui.screen.HomeTabScreen
 import com.example.english.ui.screen.LibraryManagementScreen
 import com.example.english.ui.screen.LibrarySection
+import com.example.english.ui.screen.MatchingScreen
 import com.example.english.ui.screen.MoErScreen
 import com.example.english.ui.screen.MoErWord
 import com.example.english.ui.screen.SettingsScreen
@@ -70,6 +71,7 @@ sealed class Screen {
     data object DictationPage : Screen()
     data object PronunciationPage : Screen()
     data object MeaningPage : Screen()
+    data object MatchingPage : Screen()
 }
 
 class MainActivity : ComponentActivity() {
@@ -252,6 +254,9 @@ class MainActivity : ComponentActivity() {
                                             ensureAudioPermission {
                                                 currentScreen = Screen.MeaningPage
                                             }
+                                        },
+                                        onMatchingTaskClick = {
+                                            currentScreen = Screen.MatchingPage
                                         }
                                     )
                                     MainTab.Study -> HomeScreen(
@@ -278,6 +283,9 @@ class MainActivity : ComponentActivity() {
                                             ensureAudioPermission {
                                                 currentScreen = Screen.MeaningPage
                                             }
+                                        },
+                                        onMatchingClick = {
+                                            currentScreen = Screen.MatchingPage
                                         },
                                         onSettingsClick = {
                                             currentScreen = Screen.Main(MainTab.Settings)
@@ -359,6 +367,10 @@ class MainActivity : ComponentActivity() {
                         onBack = backToStudy,
                         onTrainingCompleted = { mode -> markTrainingDone(taskStore, mode) }
                     )
+                    is Screen.MatchingPage -> MatchingPage(
+                        onBack = backToStudy,
+                        onTrainingCompleted = { mode -> markTrainingDone(taskStore, mode) }
+                    )
                 }
             }
         }
@@ -380,6 +392,7 @@ private fun markTrainingDone(store: DailyTaskStore, mode: TrainingMode) {
         TrainingMode.Dictation -> store.markDictationDone()
         TrainingMode.Pronunciation -> store.markPronunciationDone()
         TrainingMode.Meaning -> store.markMeaningDone()
+        TrainingMode.Matching -> store.markMatchingDone()
     }
 }
 
@@ -407,6 +420,28 @@ private fun TrainingPage(
         onTrainingCompleted = {
             progressStore.clear(mode.name)
             onTrainingCompleted(mode)
+        }
+    )
+}
+
+@Composable
+private fun MatchingPage(
+    onBack: () -> Unit,
+    onTrainingCompleted: (TrainingMode) -> Unit = {}
+) {
+    val context = LocalContext.current
+    val trainingViewModel: WordViewModel = viewModel()
+    val progressStore = remember { TrainingProgressStore(context) }
+    var matchingWords by remember { mutableStateOf<List<Word>>(emptyList()) }
+    LaunchedEffect(Unit) { matchingWords = trainingViewModel.getTrainingWords() }
+    MatchingScreen(
+        words = matchingWords,
+        initialMatchedCount = progressStore.getIndex(TrainingMode.Matching.name),
+        onBack = onBack,
+        onProgressChange = { index -> progressStore.saveIndex(TrainingMode.Matching.name, index, matchingWords.size) },
+        onCompleted = {
+            progressStore.clear(TrainingMode.Matching.name)
+            onTrainingCompleted(TrainingMode.Matching)
         }
     )
 }
