@@ -149,7 +149,8 @@ private val syllableColors = listOf(
 fun WordScreen(
     viewModel: WordViewModel,
     speechService: SpeechService,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onGoHome: () -> Unit
 ) {
     val quizState by viewModel.state.collectAsStateWithLifecycle()
     var revealed by remember { mutableStateOf(false) }
@@ -404,7 +405,7 @@ fun WordScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(32.dp))
-                        Button(onClick = onBack, shape = RoundedCornerShape(14.dp)) {
+                        Button(onClick = onGoHome, shape = RoundedCornerShape(14.dp)) {
                             Text("返回首页")
                         }
                     }
@@ -431,7 +432,7 @@ fun WordScreen(
                             textAlign = TextAlign.Center
                         )
                         Spacer(modifier = Modifier.height(32.dp))
-                        Button(onClick = onBack, shape = RoundedCornerShape(14.dp)) {
+                        Button(onClick = onGoHome, shape = RoundedCornerShape(14.dp)) {
                             Text("返回首页")
                         }
                     }
@@ -506,6 +507,14 @@ fun WordScreen(
                                 modifier = Modifier.padding(top = 8.dp)
                             )
                         }
+
+                        // 今日发现进度：已发现 X / 目标 Y 个不认识单词
+                        Text(
+                            text = "今日已发现 ${active.dailyUnknownFound}/${active.dailyUnknownLimit} 个不认识单词",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
 
                         Spacer(modifier = Modifier.height(40.dp))
 
@@ -1174,7 +1183,7 @@ fun WordScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = onBack) {
+                TextButton(onClick = onGoHome) {
                     Text("返回首页")
                 }
             }

@@ -105,6 +105,7 @@ class MainActivity : ComponentActivity() {
                 val taskStore = remember { DailyTaskStore(this@MainActivity) }
 
                 val backToStudy: () -> Unit = { currentScreen = Screen.Main(MainTab.Study) }
+                val backToHome: () -> Unit = { currentScreen = Screen.Main(MainTab.Home) }
 
                 LaunchedEffect(currentScreen) {
                     if (currentScreen is Screen.Main) {
@@ -296,7 +297,8 @@ class MainActivity : ComponentActivity() {
                         WordScreen(
                             viewModel = wordViewModel,
                             speechService = speechService,
-                            onBack = backToStudy
+                            onBack = backToStudy,
+                            onGoHome = backToHome
                         )
                     }
                     is Screen.LibraryManagement -> {

@@ -20,7 +20,11 @@ sealed class QuizState {
         val isReview: Boolean,
         val unknownCount: Int,
         val knownCount: Int,
-        val stage: Int = 0
+        val stage: Int = 0,
+        /** 今日已发现的不认识单词数（背单词过程中标记"不认识"计入） */
+        val dailyUnknownFound: Int = 0,
+        /** 今日需要发现的不认识单词目标数 */
+        val dailyUnknownLimit: Int = 0
     ) : QuizState()
     data object Complete : QuizState()
     data object DailyComplete : QuizState()
@@ -65,6 +69,8 @@ class WordViewModel(application: Application) : AndroidViewModel(application) {
 
                 unknownCount = repository.getUnknownCount()
                 knownCount = repository.getKnownCount()
+                val dailyUnknownFound = repository.dailyUnknownFoundCount()
+                val dailyUnknownLimit = repository.getDailyUnknownLimit()
 
                 val unknown = repository.getNextUnknownWord(currentUnknownWord?.id ?: -1L)
                 if (unknown != null) {
@@ -74,7 +80,9 @@ class WordViewModel(application: Application) : AndroidViewModel(application) {
                         isReview = true,
                         unknownCount = unknownCount,
                         knownCount = knownCount,
-                        stage = unknown.stage
+                        stage = unknown.stage,
+                        dailyUnknownFound = dailyUnknownFound,
+                        dailyUnknownLimit = dailyUnknownLimit
                     )
                     return@launch
                 }
@@ -86,7 +94,9 @@ class WordViewModel(application: Application) : AndroidViewModel(application) {
                         word = apiWord.toWord(),
                         isReview = false,
                         unknownCount = unknownCount,
-                        knownCount = knownCount
+                        knownCount = knownCount,
+                        dailyUnknownFound = dailyUnknownFound,
+                        dailyUnknownLimit = dailyUnknownLimit
                     )
                     return@launch
                 }
@@ -100,7 +110,9 @@ class WordViewModel(application: Application) : AndroidViewModel(application) {
                         word = apiWord.toWord(),
                         isReview = false,
                         unknownCount = unknownCount,
-                        knownCount = knownCount
+                        knownCount = knownCount,
+                        dailyUnknownFound = dailyUnknownFound,
+                        dailyUnknownLimit = dailyUnknownLimit
                     )
                 } else {
                     _state.value = QuizState.Complete
@@ -142,7 +154,9 @@ class WordViewModel(application: Application) : AndroidViewModel(application) {
                     // 新词被标记为不认识：计入今日发现数，达到上限则今日任务完成。
                     // 此时先记录 pending，不立即置 DailyComplete——等磨耳音频播完后再由
                     // completeDailyIfPending() 切换界面，避免音频被中断。
-                    if (repository.recordUnknownFoundAndCheckDone(apiWord.word)) {
+                    val done = repository.recordUnknownFoundAndCheckDone(apiWord.word)
+                    updateDailyFoundCount()
+                    if (done) {
                         _pendingDailyComplete.value = true
                         return@launch
                     }
@@ -162,6 +176,15 @@ class WordViewModel(application: Application) : AndroidViewModel(application) {
             _pendingDailyComplete.value = false
             _state.value = QuizState.DailyComplete
         }
+    }
+
+    /** 刷新当前 Active 状态里的"今日已发现/目标"计数，供背单词界面实时展示。 */
+    private fun updateDailyFoundCount() {
+        val current = _state.value as? QuizState.Active ?: return
+        _state.value = current.copy(
+            dailyUnknownFound = repository.dailyUnknownFoundCount(),
+            dailyUnknownLimit = repository.getDailyUnknownLimit()
+        )
     }
 
     fun resetProgress() {
