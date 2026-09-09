@@ -262,6 +262,8 @@ private fun ReviewFlow(
     var celebrating by remember { mutableStateOf(false) }
     var retrying by remember { mutableStateOf(false) }
     var meaningRevealed by remember { mutableStateOf(false) }
+    // 正在按住说话/录音：此时禁用页面上所有播放音频的按钮，避免外放混进麦克风
+    var speaking by remember { mutableStateOf(false) }
 
     // 最近一次录音识别的结果 + 录音文件（仅在 MEANING / READ stage 持有）。
     // advance() 切到下一 stage 时清空；切换单词由 advance() 兜底；stage 切换时
@@ -413,13 +415,16 @@ private fun ReviewFlow(
                                 text = word.word,
                                 style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold)
                             )
-                            IconButton(onClick = {
-                                if (word.pronunciation.isBlank()) {
-                                    Toast.makeText(context, "该词暂无发音音频", Toast.LENGTH_SHORT).show()
-                                    return@IconButton
-                                }
-                                scope.launch { playPronunciation(context, word.pronunciation) }
-                            }) {
+                            IconButton(
+                                onClick = {
+                                    if (word.pronunciation.isBlank()) {
+                                        Toast.makeText(context, "该词暂无发音音频", Toast.LENGTH_SHORT).show()
+                                        return@IconButton
+                                    }
+                                    scope.launch { playPronunciation(context, word.pronunciation) }
+                                },
+                                enabled = !speaking
+                            ) {
                                 Icon(Icons.Rounded.VolumeUp, contentDescription = "播放发音")
                             }
                         }
@@ -454,7 +459,7 @@ private fun ReviewFlow(
                             ) {
                                 IconButton(
                                     onClick = { lastRecordingFile?.let { startRecordingPlayback(it) } },
-                                    enabled = lastRecordingFile != null && recordingPlaybackJob == null
+                                    enabled = lastRecordingFile != null && recordingPlaybackJob == null && !speaking
                                 ) {
                                     Icon(Icons.Rounded.PlayArrow, contentDescription = "播放录音")
                                 }
@@ -567,6 +572,7 @@ private fun ReviewFlow(
                     HoldToSpeakButton(
                         enabled = hasMicPermission && !checking && recordingPlaybackJob == null,
                         label = "说意思",
+                        onRecordingChange = { speaking = it },
                         onResult = { text, wavFile ->
                             lastRecognizedText = text
                             lastRecordingFile = wavFile
@@ -670,6 +676,7 @@ private fun ReviewFlow(
                         enabled = hasMicPermission && !checking && recordingPlaybackJob == null,
                         label = "读一遍",
                         english = true,
+                        onRecordingChange = { speaking = it },
                         onResult = { text, wavFile ->
                             lastRecognizedText = text
                             lastRecordingFile = wavFile
@@ -753,6 +760,8 @@ private fun ReviewFlow(
 private fun HoldToSpeakButton(
     enabled: Boolean,
     label: String,
+    /** 录音/说话状态变化回调（true=按住说话中），供页面禁用其他播放按钮 */
+    onRecordingChange: (Boolean) -> Unit = {},
     /** 识别成功后回调：第二个参数是录音对应的 WAV 文件（用于回放），可能为 null */
     onResult: (String, File?) -> Unit,
     onError: (String) -> Unit,
@@ -786,10 +795,12 @@ private fun HoldToSpeakButton(
                     val down = awaitFirstDown(requireUnconsumed = false)
                     if (!enabled || recording) return@awaitEachGesture
                     recording = true
+                    onRecordingChange(true)
                     try {
                         speech.startRecording()
                     } catch (e: Exception) {
                         recording = false
+                        onRecordingChange(false)
                         onError(e.message ?: "录音启动失败")
                         return@awaitEachGesture
                     }
@@ -800,6 +811,7 @@ private fun HoldToSpeakButton(
                     }
                     // 用户松开：停止录音并识别
                     recording = false
+                    onRecordingChange(false)
                     scope.launch {
                         speech.stopAndRecognize()
                             .onSuccess { onResult(it, speech.lastWavFile) }
