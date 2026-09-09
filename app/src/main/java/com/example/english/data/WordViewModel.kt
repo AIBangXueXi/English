@@ -45,6 +45,9 @@ class WordViewModel(application: Application) : AndroidViewModel(application) {
     private var currentUnknownWord: UnknownWord? = null
     private var unknownCount: Int = 0
     private var knownCount: Int = 0
+    /** 今日发现数已达上限，等磨耳音频播完后再切到 DailyComplete 界面 */
+    private val _pendingDailyComplete = MutableStateFlow(false)
+    val pendingDailyComplete: StateFlow<Boolean> = _pendingDailyComplete
 
     init {
         loadNextWord()
@@ -136,9 +139,11 @@ class WordViewModel(application: Application) : AndroidViewModel(application) {
                     val apiWord = pendingApiWords.getOrNull(currentApiIndex) ?: return@launch
                     repository.addToUnknown(apiWord)
                     repository.advanceSeq(1)
-                    // 新词被标记为不认识：计入今日发现数，达到上限则今日任务完成
+                    // 新词被标记为不认识：计入今日发现数，达到上限则今日任务完成。
+                    // 此时先记录 pending，不立即置 DailyComplete——等磨耳音频播完后再由
+                    // completeDailyIfPending() 切换界面，避免音频被中断。
                     if (repository.recordUnknownFoundAndCheckDone(apiWord.word)) {
-                        _state.value = QuizState.DailyComplete
+                        _pendingDailyComplete.value = true
                         return@launch
                     }
                 }
@@ -146,6 +151,16 @@ class WordViewModel(application: Application) : AndroidViewModel(application) {
             } catch (e: Exception) {
                 _state.value = QuizState.Error(e.message ?: "未知错误")
             }
+        }
+    }
+
+    /**
+     * 磨耳音频播放完毕后由 UI 调用；若今日发现数已达上限则切换到 DailyComplete 界面。
+     */
+    fun completeDailyIfPending() {
+        if (_pendingDailyComplete.value) {
+            _pendingDailyComplete.value = false
+            _state.value = QuizState.DailyComplete
         }
     }
 

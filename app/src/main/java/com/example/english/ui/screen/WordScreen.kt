@@ -278,6 +278,15 @@ fun WordScreen(
         }
     }
 
+    // 磨耳音频播完 + 今日发现数达上限 → 切换到“今日学习任务已完成”界面。
+    // 用 LaunchedEffect 同时监听两项条件，谁先到都行，避免音频与计数完成的先后竞态。
+    val pendingDailyComplete by viewModel.pendingDailyComplete.collectAsStateWithLifecycle()
+    LaunchedEffect(isMoErPlaying, pendingDailyComplete, quizState) {
+        if (!isMoErPlaying && pendingDailyComplete && quizState is QuizState.Active) {
+            viewModel.completeDailyIfPending()
+        }
+    }
+
     LaunchedEffect(isPressed) {
         if (meaningPassed || gaveUp) return@LaunchedEffect
         val word = currentWord ?: return@LaunchedEffect
