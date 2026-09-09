@@ -1465,7 +1465,11 @@ private fun EtymologyBreakdown(
 }
 
 @Composable
-internal fun CelebrationBanner(visible: Boolean, onFinished: () -> Unit) {
+internal fun CelebrationBanner(
+    visible: Boolean,
+    onFinished: () -> Unit,
+    durationMillis: Int = 2500
+) {
     val starColors = listOf(
         Color(0xFFFFD700), Color(0xFFFF6B6B), Color(0xFF4FC3F7),
         Color(0xFF81C784), Color(0xFFFFB74D), Color(0xFFBA68C8)
@@ -1484,7 +1488,7 @@ internal fun CelebrationBanner(visible: Boolean, onFinished: () -> Unit) {
 
     if (visible) {
         LaunchedEffect(Unit) {
-            kotlinx.coroutines.delay(2500)
+            kotlinx.coroutines.delay(durationMillis.toLong())
             onFinished()
         }
     }
@@ -1551,7 +1555,11 @@ internal fun CelebrationBanner(visible: Boolean, onFinished: () -> Unit) {
 }
 
 @Composable
-internal fun RetryBanner(visible: Boolean, onFinished: () -> Unit) {
+internal fun RetryBanner(
+    visible: Boolean,
+    onFinished: () -> Unit,
+    subtitle: String = "长按按钮再试一次"
+) {
     val shakeOffset = remember { Animatable(0f) }
     val alpha by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
@@ -1602,7 +1610,7 @@ internal fun RetryBanner(visible: Boolean, onFinished: () -> Unit) {
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "长按按钮再试一次",
+                text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center

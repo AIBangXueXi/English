@@ -110,14 +110,14 @@ class SpeechService(
 
     suspend fun stopAndRecognize(): Result<String> = withContext(Dispatchers.IO) {
         isRecording = false
-        recordingThread?.join(3000)
-        recordingThread = null
-
+        // 先 stop 打断阻塞在 read() 的录音线程（一个 buffer 最多 1s），再 join，避免松开后白等
         try {
             audioRecord?.stop()
         } catch (e: Exception) {
             Log.w(TAG, "Error stopping AudioRecord", e)
         }
+        recordingThread?.join(3000)
+        recordingThread = null
         audioRecord?.release()
         audioRecord = null
 

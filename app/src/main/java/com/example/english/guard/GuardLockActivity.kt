@@ -89,6 +89,7 @@ import com.example.english.data.entity.UnknownWord
 import com.example.english.speech.SpeechService
 import com.example.english.ui.screen.CelebrationBanner
 import com.example.english.ui.screen.DictationLetterBoxes
+import com.example.english.ui.screen.RetryBanner
 import com.example.english.ui.screen.Word
 import com.example.english.ui.screen.playErrorSound
 import com.example.english.ui.screen.playPronunciation
@@ -259,6 +260,7 @@ private fun ReviewFlow(
     var hint by remember { mutableStateOf<String?>(null) }
     var checking by remember { mutableStateOf(false) }
     var celebrating by remember { mutableStateOf(false) }
+    var retrying by remember { mutableStateOf(false) }
     var meaningRevealed by remember { mutableStateOf(false) }
 
     // 最近一次录音识别的结果 + 录音文件（仅在 MEANING / READ stage 持有）。
@@ -340,17 +342,23 @@ private fun ReviewFlow(
         )
     }
 
-    val commitSpelling: () -> Unit = {
-        val input = spellingInput.trim()
-        if (input.isNotEmpty()) {
-            if (input.equals(word.word.replace(" ", ""), ignoreCase = true)) {
-                hint = null
-                celebrating = true
-            } else {
-                hint = "拼写有误，再试试"
-                playErrorSound(context)
-            }
+    fun submitSpelling(input: String) {
+        if (input.isEmpty()) return
+        if (input.equals(word.word.replace(" ", ""), ignoreCase = true)) {
+            hint = null
+            celebrating = true
+            playSuccessSound(context)
+        } else {
+            // 答错清空，方便直接重输（自动提交时输入已满，不清空无法再输入）
+            spellingInput = ""
+            hint = "拼写有误，再试试"
+            retrying = true
+            playErrorSound(context)
         }
+    }
+
+    val commitSpelling: () -> Unit = {
+        submitSpelling(spellingInput.trim())
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -537,8 +545,10 @@ private fun ReviewFlow(
                                         hint = null
                                         meaningRevealed = true
                                         celebrating = true
+                                        playSuccessSound(context)
                                     } else {
                                         hint = "意思不正确，再试试"
+                                        retrying = true
                                         playErrorSound(context)
                                     }
                                 }
@@ -565,8 +575,10 @@ private fun ReviewFlow(
                                     hint = null
                                     meaningRevealed = true
                                     celebrating = true
+                                    playSuccessSound(context)
                                 } else {
                                     hint = "没听清或意思不对，再试一次"
+                                    retrying = true
                                     playErrorSound(context)
                                 }
                             }
@@ -599,8 +611,13 @@ private fun ReviewFlow(
                     BasicTextField(
                         value = spellingInput,
                         onValueChange = { raw ->
-                            spellingInput = raw.filter { it in 'a'..'z' || it in 'A'..'Z' }.take(letterCount)
+                            val filtered = raw.filter { it in 'a'..'z' || it in 'A'..'Z' }.take(letterCount)
+                            spellingInput = filtered
                             hint = null
+                            // 拼满全部字母自动提交，无需点确认
+                            if (filtered.length == letterCount) {
+                                submitSpelling(filtered)
+                            }
                         },
                         modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
                         singleLine = true,
@@ -658,9 +675,11 @@ private fun ReviewFlow(
                                 checking = false
                                 hint = null
                                 celebrating = true
+                                playSuccessSound(context)
                             } else {
                                 checking = false
                                 hint = "读得不太准，再读一次"
+                                retrying = true
                                 playErrorSound(context)
                             }
                         },
@@ -682,28 +701,47 @@ private fun ReviewFlow(
                 strokeWidth = 2.dp
             )
         }
-    }
 
-    // 答对提示动画：结束后进入下一步
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        AnimatedVisibility(
-            visible = celebrating,
-            enter = fadeIn(),
-            exit = fadeOut()
+        // 答对/答错提示动画：全屏居中覆盖层（在 BoxScope 内 align 覆盖主内容）
+        Box(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .fillMaxSize(),
+            contentAlignment = Alignment.Center
         ) {
-            CelebrationBanner(
+            // 答对：结束后进入下一步
+            AnimatedVisibility(
                 visible = celebrating,
-                onFinished = {
-                    celebrating = false
-                    playSuccessSound(context)
-                    when (stage) {
-                        LockStage.MEANING -> stage = LockStage.SPELL
-                        LockStage.SPELL -> stage = LockStage.READ
-                        LockStage.READ -> advance()
-                        LockStage.DONE -> Unit
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                CelebrationBanner(
+                    visible = celebrating,
+                    durationMillis = 1600,
+                    onFinished = {
+                        celebrating = false
+                        when (stage) {
+                            LockStage.MEANING -> stage = LockStage.SPELL
+                            LockStage.SPELL -> stage = LockStage.READ
+                            LockStage.READ -> advance()
+                            LockStage.DONE -> Unit
+                        }
                     }
-                }
-            )
+                )
+            }
+
+            // 答错：抖动提示
+            AnimatedVisibility(
+                visible = retrying,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                RetryBanner(
+                    visible = retrying,
+                    subtitle = if (stage == LockStage.SPELL) "重新输入单词" else "再试一次",
+                    onFinished = { retrying = false }
+                )
+            }
         }
     }
 }
