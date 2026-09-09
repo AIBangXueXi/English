@@ -478,7 +478,10 @@ private fun ReviewFlow(
                         DictationLetterBoxes(
                             word = uiWord,
                             spellingInput = spellingInput,
-                            onLetterClick = { focusRequester.requestFocus() }
+                            onLetterClick = {
+                                focusRequester.requestFocus()
+                                keyboardController?.show()
+                            }
                         )
                     }
                 }

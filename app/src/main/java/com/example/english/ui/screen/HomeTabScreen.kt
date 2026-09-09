@@ -132,6 +132,50 @@ fun HomeTabScreen(
         ) {
             Spacer(modifier = Modifier.height(16.dp))
 
+            // ===== 统计 =====
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        text = "学习统计",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        StatChip(
+                            label = "认识",
+                            value = knownCount,
+                            color = Color(0xFF4CAF50),
+                            onClick = onKnownWordsClick
+                        )
+                        StatChip(
+                            label = "不认识",
+                            value = unknownCount,
+                            color = Color(0xFF9E9E9E),
+                            onClick = onUnknownWordsClick
+                        )
+                        StatChip(label = "今日完成", value = done, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             // ===== 今日任务 =====
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -254,50 +298,6 @@ fun HomeTabScreen(
                         progress = (todayTask.moErSeconds.toFloat() / MO_ER_TARGET_SECONDS).coerceIn(0f, 1f),
                         onClick = onMoErTaskClick
                     )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // ===== 统计 =====
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                ),
-                shape = RoundedCornerShape(16.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                ) {
-                    Text(
-                        text = "学习统计",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        StatChip(
-                            label = "认识",
-                            value = knownCount,
-                            color = Color(0xFF4CAF50),
-                            onClick = onKnownWordsClick
-                        )
-                        StatChip(
-                            label = "不认识",
-                            value = unknownCount,
-                            color = Color(0xFF9E9E9E),
-                            onClick = onUnknownWordsClick
-                        )
-                        StatChip(label = "今日完成", value = done, color = MaterialTheme.colorScheme.primary)
-                    }
                 }
             }
 
