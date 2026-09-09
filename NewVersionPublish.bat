@@ -13,7 +13,7 @@ powershell -NoProfile -Command ^
   "$f = 'app\build.gradle.kts'; " ^
   "$c = Get-Content -Raw $f; " ^
   "$c = [regex]::Replace($c, 'versionCode\s*=\s*\d+', { param($m) 'versionCode = ' + (([int]($m.Value -replace '\D','')) + 1) }); " ^
-  "$c = [regex]::Replace($c, 'versionName\s*=\s*\x22(\d+)\.(\d+)\.(\d+)\x22', { param($m) 'versionName = \x22' + $m.Groups[1].Value + '.' + ([int]$m.Groups[2].Value + 1) + '.' + $m.Groups[3].Value + '\x22' }); " ^
+  "$c = [regex]::Replace($c, 'versionName\s*=\s*\x22(\d+)\.(\d+)\.(\d+)\x22', { param($m) 'versionName = ' + [char]0x22 + $m.Groups[1].Value + '.' + ([int]$m.Groups[2].Value + 1) + '.' + $m.Groups[3].Value + [char]0x22 }); " ^
   "Set-Content -Path $f -Value $c -Encoding UTF8 -NoNewline"
 if %ERRORLEVEL% neq 0 (
     echo ERROR: Failed to update version in app\build.gradle.kts
@@ -24,7 +24,7 @@ REM 2. Extract versionName from app/build.gradle.kts
 echo [2/5] Reading version from app\build.gradle.kts ...
 
 set TEMP_FILE=%TEMP%\ver_%RANDOM%.txt
-powershell -NoProfile -Command "(Select-String -Path 'app\build.gradle.kts' -Pattern 'versionName\s*=\s*\x22([^\x22]+)\x22').Matches.Groups[1].Value | Out-File -FilePath '%TEMP_FILE%' -Encoding ASCII -NoNewline"
+powershell -NoProfile -Command "(Select-String -Path 'app\build.gradle.kts' -Pattern 'versionName\s*=\s*\x22([^\x22]+)\x22').Matches[0].Groups[1].Value | Out-File -FilePath '%TEMP_FILE%' -Encoding ASCII -NoNewline"
 set /p VERSION=<"%TEMP_FILE%"
 del "%TEMP_FILE%"
 

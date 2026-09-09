@@ -1,4 +1,4 @@
-plugins {
+﻿plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
@@ -12,8 +12,8 @@ android {
         applicationId = "com.example.english"
         minSdk = 24
         targetSdk = 36
-        versionCode = 43
-        versionName = "1.43.0"
+        versionCode = 44
+        versionName = "1.44.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
