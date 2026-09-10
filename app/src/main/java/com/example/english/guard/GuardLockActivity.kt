@@ -40,6 +40,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.Button
@@ -167,7 +168,20 @@ fun GuardLockScreen(onFinish: () -> Unit) {
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("娱乐管控") })
+            TopAppBar(
+                title = { Text("娱乐管控") },
+                navigationIcon = {
+                    IconButton(onClick = {
+                        context.startActivity(
+                            Intent(context, MainActivity::class.java)
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                        onFinish()
+                    }) {
+                        Icon(Icons.Rounded.Home, contentDescription = "返回首页")
+                    }
+                }
+            )
         }
     ) { innerPadding ->
         // 注意：外层 Column 不要 .verticalScroll —— 否则会把高度约束解绑成 Infinity，
