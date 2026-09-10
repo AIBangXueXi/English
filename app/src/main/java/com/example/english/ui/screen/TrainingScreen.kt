@@ -87,6 +87,7 @@ import com.example.english.data.api.DeepSeekService
 import com.example.english.data.resolveRawResId
 import com.example.english.data.resolveStaticUrl
 import com.example.english.data.playAudioAwait
+import com.example.english.speech.OralEvalService
 import com.example.english.speech.SpeechService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -128,7 +129,9 @@ fun TrainingScreen(
     initialIndex: Int = 0,
     onProgressChange: (Int) -> Unit = {},
     /** 英语专项识别服务：发音训练读单词时用，识别英文更准 */
-    englishSpeechService: SpeechService = speechService
+    englishSpeechService: SpeechService = speechService,
+    /** 口语评测服务：发音训练用驰声 SDK 打分，替代 ASR 字符串比对 */
+    oralEvalService: OralEvalService? = null
 ) {
     val context = LocalContext.current
     // 发音训练读的是英文单词，走英语专项 AppKey；意思训练说中文，仍用通用 Key
@@ -155,6 +158,7 @@ fun TrainingScreen(
     var isProcessing by remember { mutableStateOf(false) }
     var isAiChecking by remember { mutableStateOf(false) }
     var recognizedText by remember { mutableStateOf<String?>(null) }
+    var evalScore by remember { mutableStateOf<Int?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var hasPcmData by remember { mutableStateOf(false) }
     var hasActiveRecording by remember { mutableStateOf(false) }
@@ -184,6 +188,7 @@ fun TrainingScreen(
         isProcessing = false
         isAiChecking = false
         recognizedText = null
+        evalScore = null
         errorMessage = null
         hasPcmData = false
         hasActiveRecording = false
@@ -245,11 +250,56 @@ fun TrainingScreen(
         }
     }
 
+    // 发音评测引擎预初始化（拉凭证 + 建引擎一次），避免按下时才等待
+    LaunchedEffect(mode) {
+        if (mode == TrainingMode.Pronunciation) {
+            val svc = oralEvalService ?: return@LaunchedEffect
+            svc.ensureReady().onFailure { e ->
+                errorMessage = "评测引擎初始化失败: ${e.message}"
+            }
+        }
+    }
+
     // 按住录音 → 松开识别（发音训练 / 单词意思）
     LaunchedEffect(isPressed) {
         if (mode == TrainingMode.Dictation) return@LaunchedEffect
         if (passed || gaveUp) return@LaunchedEffect
         val word = currentWord ?: return@LaunchedEffect
+
+        // 发音训练走驰声评测打分（引擎内部录音），其余走 ASR
+        if (mode == TrainingMode.Pronunciation && oralEvalService != null) {
+            if (isPressed && !hasActiveRecording) {
+                hasActiveRecording = true
+                isRecording = true
+                recognizedText = null
+                evalScore = null
+                errorMessage = null
+                hasPcmData = false
+                oralEvalService.startWord(word.word) { result ->
+                    hasActiveRecording = false
+                    isRecording = false
+                    isProcessing = false
+                    if (result.error != null) {
+                        errorMessage = result.error
+                    } else {
+                        evalScore = result.score
+                        if (result.passed) {
+                            markPassed()
+                        } else {
+                            showRetryHint = true
+                            playErrorSound(context)
+                        }
+                    }
+                }
+            } else if (!isPressed && hasActiveRecording) {
+                hasActiveRecording = false
+                isRecording = false
+                isProcessing = true
+                oralEvalService.stop()
+            }
+            return@LaunchedEffect
+        }
+
         if (isPressed && !hasActiveRecording) {
             hasActiveRecording = true
             isRecording = true
@@ -585,6 +635,32 @@ fun TrainingScreen(
                                                 playJob?.cancel()
                                                 isPlaying = false
                                             }
+                                        )
+                                    }
+                                }
+
+                                AnimatedVisibility(
+                                    visible = evalScore != null && !isProcessing && !isAiChecking,
+                                    enter = fadeIn(),
+                                    exit = fadeOut()
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.padding(vertical = 8.dp)
+                                    ) {
+                                        Text(
+                                            text = "发音得分",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Text(
+                                            text = "${evalScore ?: 0} 分",
+                                            style = MaterialTheme.typography.titleLarge.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 28.sp
+                                            ),
+                                            color = if (passed) Color(0xFF2E7D32) else Color(0xFFE53935),
+                                            textAlign = TextAlign.Center
                                         )
                                     }
                                 }

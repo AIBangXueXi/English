@@ -19,6 +19,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // 驰声(ssound)口语评测 SDK
+        maven("https://repo.singsound.com/repository/singsound_ginger_android_sdk/")
     }
 }
 

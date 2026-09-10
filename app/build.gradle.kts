@@ -70,6 +70,12 @@ dependencies {
     implementation(libs.retrofit.converter.gson)
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging)
+    implementation(libs.evaluating) {
+        // evaluating 的 POM 带了 sample-app 的 appcompat/constraintlayout，
+        // 实际 SDK 类只用 androidx.annotation / androidx.core（本工程已有），排除避免拉旧依赖。
+        exclude(group = "androidx.appcompat")
+        exclude(group = "androidx.constraintlayout")
+    }
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

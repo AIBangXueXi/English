@@ -39,6 +39,7 @@ import com.example.english.data.WordRepository
 import com.example.english.data.WordViewModel
 import com.example.english.data.update.UpdateInfo
 import com.example.english.data.update.UpdateManager
+import com.example.english.speech.OralEvalService
 import com.example.english.speech.SpeechService
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.english.ui.screen.HomeScreen
@@ -78,6 +79,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var speechService: SpeechService
     // 发音训练专用：英语专项识别 AppKey
     private lateinit var englishSpeechService: SpeechService
+    // 发音训练专用：驰声口语评测（发音打分）
+    private lateinit var oralEvalService: OralEvalService
     private lateinit var updateManager: UpdateManager
 
     private val requestPermissionLauncher =
@@ -91,6 +94,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         speechService = SpeechService(this)
         englishSpeechService = SpeechService(this, SpeechService.APP_KEY_ENGLISH)
+        oralEvalService = OralEvalService(this)
         updateManager = UpdateManager(this)
         enableEdgeToEdge()
 
@@ -350,6 +354,7 @@ class MainActivity : ComponentActivity() {
                         mode = TrainingMode.Dictation,
                         speechService = speechService,
                         englishSpeechService = englishSpeechService,
+                        oralEvalService = oralEvalService,
                         onBack = backToStudy,
                         onTrainingCompleted = { mode -> markTrainingDone(taskStore, mode) }
                     )
@@ -357,6 +362,7 @@ class MainActivity : ComponentActivity() {
                         mode = TrainingMode.Pronunciation,
                         speechService = speechService,
                         englishSpeechService = englishSpeechService,
+                        oralEvalService = oralEvalService,
                         onBack = backToStudy,
                         onTrainingCompleted = { mode -> markTrainingDone(taskStore, mode) }
                     )
@@ -364,6 +370,7 @@ class MainActivity : ComponentActivity() {
                         mode = TrainingMode.Meaning,
                         speechService = speechService,
                         englishSpeechService = englishSpeechService,
+                        oralEvalService = oralEvalService,
                         onBack = backToStudy,
                         onTrainingCompleted = { mode -> markTrainingDone(taskStore, mode) }
                     )
@@ -401,6 +408,7 @@ private fun TrainingPage(
     mode: TrainingMode,
     speechService: SpeechService,
     englishSpeechService: SpeechService,
+    oralEvalService: OralEvalService,
     onBack: () -> Unit,
     onTrainingCompleted: (TrainingMode) -> Unit = {}
 ) {
@@ -415,6 +423,7 @@ private fun TrainingPage(
         initialIndex = progressStore.getIndex(mode.name),
         speechService = speechService,
         englishSpeechService = englishSpeechService,
+        oralEvalService = oralEvalService,
         onProgressChange = { index -> progressStore.saveIndex(mode.name, index, trainingWords.size) },
         onBack = onBack,
         onTrainingCompleted = {
