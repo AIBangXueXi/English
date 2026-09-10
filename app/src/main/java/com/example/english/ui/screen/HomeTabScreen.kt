@@ -1,5 +1,6 @@
 package com.example.english.ui.screen
 
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,12 +20,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.School
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -54,6 +57,7 @@ import com.example.english.data.DailyTaskStore
 import com.example.english.data.MO_ER_TARGET_SECONDS
 import com.example.english.data.TrainingProgressStore
 import com.example.english.data.WordRepository
+import com.example.english.guard.GuardLockActivity
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -119,7 +123,14 @@ fun HomeTabScreen(
                 title = { Text("首页") },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
-                )
+                ),
+                actions = {
+                    IconButton(onClick = {
+                        context.startActivity(Intent(context, GuardLockActivity::class.java))
+                    }) {
+                        Icon(Icons.Rounded.Lock, contentDescription = "娱乐管控")
+                    }
+                }
             )
         }
     ) { innerPadding ->
