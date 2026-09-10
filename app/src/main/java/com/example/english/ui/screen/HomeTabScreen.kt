@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -88,7 +90,7 @@ fun HomeTabScreen(
     var knownCount by remember { mutableIntStateOf(0) }
     var unknownCount by remember { mutableIntStateOf(0) }
     var todayTask by remember { mutableStateOf(DailyTask()) }
-    var history by remember { mutableStateOf<List<Pair<String, DailyTask>>>(emptyList()) }
+    var weekData by remember { mutableStateOf<List<List<Pair<String, DailyTask>>>>(emptyList()) }
     var meaningPos by remember { mutableIntStateOf(0) }
     var pronunciationPos by remember { mutableIntStateOf(0) }
     var dictationPos by remember { mutableIntStateOf(0) }
@@ -97,6 +99,7 @@ fun HomeTabScreen(
     // 每次回到前台都 +1（含 App 长期后台后跨天回到前台），驱动下方数据重新加载。
     // 否则停在首页过夜，第二天看到的仍是昨天的任务进度。
     var reloadToken by remember { mutableIntStateOf(0) }
+    val pagerState = rememberPagerState(pageCount = { WEEK_COUNT })
     LifecycleStartEffect(Unit) {
         reloadToken++
         onStopOrDispose { }
@@ -107,7 +110,7 @@ fun HomeTabScreen(
         knownCount = repository.getKnownCount()
         unknownCount = repository.getUnknownCount()
         todayTask = taskStore.getToday()
-        history = taskStore.getHistory(7)
+        weekData = List(WEEK_COUNT) { taskStore.getWeekDays(it) }
         meaningPos = trainingPosition(progressStore, "Meaning", todayTask.meaningDone, unknownCount)
         pronunciationPos = trainingPosition(progressStore, "Pronunciation", todayTask.pronunciationDone, unknownCount)
         dictationPos = trainingPosition(progressStore, "Dictation", todayTask.dictationDone, unknownCount)
@@ -335,38 +338,54 @@ fun HomeTabScreen(
                         )
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    history.forEachIndexed { i, (date, task) ->
-                        val c = task.completedCount(unknownLimit)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(300.dp)
+                    ) { page ->
+                        val days = weekData.getOrNull(page).orEmpty()
+                        Column {
                             Text(
-                                text = formatDate(date, i == 0),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.weight(1f)
+                                text = weekLabel(page),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            LinearProgressIndicator(
-                                progress = { if (task.totalTasks == 0) 0f else c.toFloat() / task.totalTasks },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(6.dp),
-                                color = if (c >= task.totalTasks) Color(0xFF4CAF50)
-                                else MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                                trackColor = MaterialTheme.colorScheme.surfaceVariant
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = "$c/${task.totalTasks}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (c >= task.totalTasks) Color(0xFF4CAF50)
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.End,
-                                modifier = Modifier.width(40.dp)
-                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            days.forEachIndexed { d, (date, task) ->
+                                val c = task.completedCount(unknownLimit)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = if (date == taskStore.todayKey()) "今天" else WEEKDAY_LABELS[d],
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.width(44.dp)
+                                    )
+                                    LinearProgressIndicator(
+                                        progress = { if (task.totalTasks == 0) 0f else c.toFloat() / task.totalTasks },
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(6.dp),
+                                        color = if (c >= task.totalTasks) Color(0xFF4CAF50)
+                                        else MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = "$c/${task.totalTasks}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (c >= task.totalTasks) Color(0xFF4CAF50)
+                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = TextAlign.End,
+                                        modifier = Modifier.width(44.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -520,10 +539,15 @@ private fun trainingPosition(
     return (store.getIndex(modeKey) + 1).coerceIn(1, total)
 }
 
-private fun formatDate(key: String, isToday: Boolean): String {
-    if (isToday) return "今天"
-    val parts = key.split("-")
-    return if (parts.size == 3) "${parts[1]}/${parts[2]}" else key
+/** 展示的周数：本周 + 前四周 */
+private const val WEEK_COUNT = 5
+
+private val WEEKDAY_LABELS = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
+
+private fun weekLabel(index: Int): String = when (index) {
+    0 -> "本周"
+    1 -> "上周"
+    else -> "前${index}周"
 }
 
 /** 「9月7日 周一」格式的今日日期（中文 locale） */

@@ -90,6 +90,27 @@ class DailyTaskStore(context: Context) {
     }
 
     /**
+     * 第 [weekOffset] 周（0=本周，1=上周…）的每日完成情况，按周一到周日返回 7 天。
+     */
+    fun getWeekDays(weekOffset: Int): List<Pair<String, DailyTask>> {
+        val today = Calendar.getInstance()
+        val dow = today.get(Calendar.DAY_OF_WEEK) // SUNDAY=1 ... SATURDAY=7
+        val daysSinceMonday = if (dow == Calendar.SUNDAY) 6 else dow - 2
+        val monday = Calendar.getInstance().apply {
+            time = Date()
+            add(Calendar.DAY_OF_YEAR, -daysSinceMonday - weekOffset * 7)
+        }
+        return List(7) { d ->
+            val day = Calendar.getInstance().apply {
+                time = monday.time
+                add(Calendar.DAY_OF_YEAR, d)
+            }
+            val key = dayFormat.format(day.time)
+            key to read(key)
+        }
+    }
+
+    /**
      * 清理 [KEEP_DAYS] 天前的历史记录，避免 SharedPreferences 长期累积。
      * 每天首次构造时执行一次；日期 key 为 yyyy-MM-dd，可直接按字符串大小比较。
      */
@@ -109,8 +130,8 @@ class DailyTaskStore(context: Context) {
     }
 
     private companion object {
-        /** 历史记录保留天数 */
-        const val KEEP_DAYS = 30
+        /** 历史记录保留天数（需覆盖「本周 + 前四周」，共最多 35 天） */
+        const val KEEP_DAYS = 42
         const val KEY_LAST_PRUNE = "_last_prune"
     }
 
