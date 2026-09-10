@@ -203,7 +203,7 @@ fun HomeScreen(
                             StatItem(
                                 title = "认识",
                                 count = knownCount,
-                                color = Color(0xFF4CAF50)
+                                color = Color(0xFF1387C0)
                             )
                             Box(
                                 modifier = Modifier

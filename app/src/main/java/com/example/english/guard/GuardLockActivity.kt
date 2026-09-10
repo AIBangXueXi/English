@@ -835,7 +835,7 @@ private fun HoldToSpeakButton(
             },
         shape = RoundedCornerShape(14.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = Color(0xFF4CAF50),
+            containerColor = Color(0xFF1387C0),
             contentColor = Color.White
         )
     ) {

@@ -12,7 +12,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/widget_unknown_word_title"
-        android:textColor="#1B5E20"
+        android:textColor="#1387C0"
         android:textSize="14sp"
         android:textStyle="bold" />
 
@@ -22,7 +22,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
         android:text="0 / 5"
-        android:textColor="#388E3C"
+        android:textColor="#1387C0"
         android:textSize="20sp"
         android:textStyle="bold" />
 

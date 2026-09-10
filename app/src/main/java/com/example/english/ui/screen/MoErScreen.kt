@@ -212,7 +212,7 @@ fun MoErScreen(
                             containerColor = if (isPlaying)
                                 Color(0xFFE53935)
                             else
-                                Color(0xFF4CAF50)
+                                Color(0xFF1387C0)
                         )
                     ) {
                         Icon(

@@ -174,7 +174,7 @@ fun HomeTabScreen(
                         StatChip(
                             label = "认识",
                             value = knownCount,
-                            color = Color(0xFF4CAF50),
+                            color = Color(0xFF1387C0),
                             onClick = onKnownWordsClick
                         )
                         StatChip(
@@ -250,7 +250,7 @@ fun HomeTabScreen(
                                 text = "🎉 全部完成",
                                 style = MaterialTheme.typography.labelMedium.copy(
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF4CAF50)
+                                    color = Color(0xFF1387C0)
                                 )
                             )
                         }
@@ -263,7 +263,7 @@ fun HomeTabScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(8.dp),
-                        color = Color(0xFF4CAF50),
+                        color = Color(0xFF1387C0),
                         trackColor = MaterialTheme.colorScheme.surfaceVariant,
                     )
 
@@ -371,7 +371,7 @@ fun HomeTabScreen(
                                         modifier = Modifier
                                             .weight(1f)
                                             .height(6.dp),
-                                        color = if (c >= task.totalTasks) Color(0xFF4CAF50)
+                                        color = if (c >= task.totalTasks) Color(0xFF1387C0)
                                         else MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
                                         trackColor = MaterialTheme.colorScheme.surfaceVariant
                                     )
@@ -379,7 +379,7 @@ fun HomeTabScreen(
                                     Text(
                                         text = "$c/${task.totalTasks}",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = if (c >= task.totalTasks) Color(0xFF4CAF50)
+                                        color = if (c >= task.totalTasks) Color(0xFF1387C0)
                                         else MaterialTheme.colorScheme.onSurfaceVariant,
                                         textAlign = TextAlign.End,
                                         modifier = Modifier.width(44.dp)
@@ -423,7 +423,7 @@ private fun TaskItem(
     progress: Float,
     onClick: () -> Unit = {}
 ) {
-    val accent = if (done) Color(0xFF4CAF50) else Color(0xFFF44336)
+    val accent = if (done) Color(0xFF1387C0) else Color(0xFFF44336)
     Card(
         onClick = { if (!done) onClick() },
         modifier = Modifier

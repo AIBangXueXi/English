@@ -1051,9 +1051,9 @@ fun WordScreen(
                                         shape = RoundedCornerShape(14.dp),
                                         enabled = !isProcessing,
                                         colors = ButtonDefaults.buttonColors(
-                                            containerColor = Color(0xFF4CAF50),
+                                            containerColor = Color(0xFF1387C0),
                                             contentColor = Color.White,
-                                            disabledContainerColor = Color(0xFF4CAF50).copy(alpha = 0.5f),
+                                            disabledContainerColor = Color(0xFF1387C0).copy(alpha = 0.5f),
                                             disabledContentColor = Color.White
                                         )
                                     ) {
@@ -1215,9 +1215,9 @@ fun WordScreen(
                                         shape = RoundedCornerShape(14.dp),
                                         enabled = !isProcessing,
                                         colors = ButtonDefaults.buttonColors(
-                                            containerColor = Color(0xFF4CAF50),
+                                            containerColor = Color(0xFF1387C0),
                                             contentColor = Color.White,
-                                            disabledContainerColor = Color(0xFF4CAF50).copy(alpha = 0.5f),
+                                            disabledContainerColor = Color(0xFF1387C0).copy(alpha = 0.5f),
                                             disabledContentColor = Color.White
                                         )
                                     ) {
@@ -1472,7 +1472,7 @@ internal fun CelebrationBanner(
 ) {
     val starColors = listOf(
         Color(0xFFFFD700), Color(0xFFFF6B6B), Color(0xFF4FC3F7),
-        Color(0xFF81C784), Color(0xFFFFB74D), Color(0xFFBA68C8)
+        Color(0xFF1387C0), Color(0xFFFFB74D), Color(0xFFBA68C8)
     )
 
     val scale by animateFloatAsState(
@@ -1535,7 +1535,7 @@ internal fun CelebrationBanner(
                 imageVector = Icons.Rounded.Check,
                 contentDescription = null,
                 modifier = Modifier.size((48 * scale).dp),
-                tint = Color(0xFF4CAF50)
+                tint = Color(0xFF1387C0)
             )
 
             Spacer(modifier = Modifier.height(4.dp))
@@ -1546,7 +1546,7 @@ internal fun CelebrationBanner(
                     fontWeight = FontWeight.Bold,
                     fontSize = (28 * scale).sp
                 ),
-                color = Color(0xFF4CAF50),
+                color = Color(0xFF1387C0),
                 textAlign = TextAlign.Center
             )
             }

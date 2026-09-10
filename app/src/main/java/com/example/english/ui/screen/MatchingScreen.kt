@@ -272,14 +272,14 @@ private fun MatchingCard(
     onClick: () -> Unit
 ) {
     val container = when {
-        matched -> Color(0xFF4CAF50).copy(alpha = 0.18f)
+        matched -> Color(0xFF1387C0).copy(alpha = 0.18f)
         wrong -> MaterialTheme.colorScheme.errorContainer
         selected -> MaterialTheme.colorScheme.primaryContainer
         else -> MaterialTheme.colorScheme.surface
     }
     val border = when {
         selected -> MaterialTheme.colorScheme.primary
-        matched -> Color(0xFF4CAF50)
+        matched -> Color(0xFF1387C0)
         else -> MaterialTheme.colorScheme.surfaceVariant
     }
 

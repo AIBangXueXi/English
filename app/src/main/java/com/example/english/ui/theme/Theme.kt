@@ -12,15 +12,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Green80,
-    secondary = GreenGrey80,
-    tertiary = Teal80
+    primary = Blue80,
+    secondary = Orange80,
+    tertiary = BlueGrey80
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Green40,
-    secondary = GreenGrey40,
-    tertiary = Teal40
+    primary = Blue40,
+    secondary = Orange40,
+    tertiary = BlueGrey40
 )
 
 @Composable

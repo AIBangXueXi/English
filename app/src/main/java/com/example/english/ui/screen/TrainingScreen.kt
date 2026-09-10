@@ -1206,9 +1206,9 @@ private fun BoxScope.BottomActionArea(
                         shape = RoundedCornerShape(14.dp),
                         enabled = !isProcessing,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF4CAF50),
+                            containerColor = Color(0xFF1387C0),
                             contentColor = Color.White,
-                            disabledContainerColor = Color(0xFF4CAF50).copy(alpha = 0.5f),
+                            disabledContainerColor = Color(0xFF1387C0).copy(alpha = 0.5f),
                             disabledContentColor = Color.White
                         )
                     ) {
@@ -1278,9 +1278,9 @@ private fun BoxScope.BottomActionArea(
                         shape = RoundedCornerShape(14.dp),
                         enabled = !isProcessing,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF4CAF50),
+                            containerColor = Color(0xFF1387C0),
                             contentColor = Color.White,
-                            disabledContainerColor = Color(0xFF4CAF50).copy(alpha = 0.5f),
+                            disabledContainerColor = Color(0xFF1387C0).copy(alpha = 0.5f),
                             disabledContentColor = Color.White
                         )
                     ) {

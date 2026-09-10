@@ -2,10 +2,10 @@ package com.example.english.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val Green80 = Color(0xFF81C784)
-val GreenGrey80 = Color(0xFFA5B8A0)
-val Teal80 = Color(0xFF80CBC4)
+val Blue80 = Color(0xFF55B7E0)
+val Orange80 = Color(0xFFFF8A50)
+val BlueGrey80 = Color(0xFF8FD0F0)
 
-val Green40 = Color(0xFF388E3C)
-val GreenGrey40 = Color(0xFF4A5D4A)
-val Teal40 = Color(0xFF00796B)
+val Blue40 = Color(0xFF1387C0)
+val Orange40 = Color(0xFFF4520D)
+val BlueGrey40 = Color(0xFF0E6A99)
