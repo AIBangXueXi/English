@@ -1,5 +1,6 @@
 package com.example.english.speech
 
+import com.example.english.BuildConfig
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -43,9 +44,9 @@ class SpeechService(
         private const val TAG = "SpeechService"
 
         /** 通用（中文）识别 */
-        const val DEFAULT_APP_KEY = "***REMOVED***"
+        val DEFAULT_APP_KEY = BuildConfig.ASR_APP_KEY_DEFAULT
         /** 英语专项识别：发音训练专用，对英文单词识别更准 */
-        const val APP_KEY_ENGLISH = "***REMOVED***"
+        val APP_KEY_ENGLISH = BuildConfig.ASR_APP_KEY_ENGLISH
 
         private const val ASR_ENDPOINT = "https://nls-gateway.cn-shanghai.aliyuncs.com/stream/v1/asr"
         private const val SAMPLE_RATE = 16000

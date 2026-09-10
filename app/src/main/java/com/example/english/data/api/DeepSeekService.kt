@@ -1,5 +1,6 @@
 package com.example.english.data.api
 
+import com.example.english.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -12,7 +13,7 @@ import java.util.concurrent.TimeUnit
 
 object DeepSeekService {
 
-    private const val API_KEY = "***REMOVED***"
+    private val API_KEY = BuildConfig.DEEPSEEK_API_KEY
     private const val API_URL = "https://api.deepseek.com/chat/completions"
 
     private val client = OkHttpClient.Builder()

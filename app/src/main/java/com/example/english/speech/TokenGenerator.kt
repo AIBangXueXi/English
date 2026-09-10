@@ -1,5 +1,6 @@
 package com.example.english.speech
 
+import com.example.english.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -16,8 +17,8 @@ import javax.crypto.spec.SecretKeySpec
 import javax.net.ssl.HttpsURLConnection
 
 object TokenGenerator {
-    private const val ACCESS_KEY_ID = "***REMOVED***"
-    private const val ACCESS_KEY_SECRET = "***REMOVED***"
+    private val ACCESS_KEY_ID = BuildConfig.ALIYUN_ACCESS_KEY_ID
+    private val ACCESS_KEY_SECRET = BuildConfig.ALIYUN_ACCESS_KEY_SECRET
     private const val TOKEN_ENDPOINT = "https://nls-meta.cn-shanghai.aliyuncs.com/pop/2018-05-18/tokens"
 
     private var cachedToken: String? = null

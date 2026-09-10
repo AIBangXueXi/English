@@ -1,8 +1,18 @@
-﻿plugins {
+﻿import java.util.Properties
+
+plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
 }
+
+// 从 local.properties 读取密钥（该文件不入库，见 local.properties.example）
+val localProperties = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+
+fun secret(name: String): String = "\"${localProperties.getProperty(name, "")}\""
 
 android {
     namespace = "com.example.english"
@@ -16,6 +26,12 @@ android {
         versionName = "1.47.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "ALIYUN_ACCESS_KEY_ID", secret("ALIYUN_ACCESS_KEY_ID"))
+        buildConfigField("String", "ALIYUN_ACCESS_KEY_SECRET", secret("ALIYUN_ACCESS_KEY_SECRET"))
+        buildConfigField("String", "DEEPSEEK_API_KEY", secret("DEEPSEEK_API_KEY"))
+        buildConfigField("String", "ASR_APP_KEY_DEFAULT", secret("ASR_APP_KEY_DEFAULT"))
+        buildConfigField("String", "ASR_APP_KEY_ENGLISH", secret("ASR_APP_KEY_ENGLISH"))
     }
 
     buildTypes {

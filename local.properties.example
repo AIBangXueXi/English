@@ -1,0 +1,16 @@
+# 复制本文件为 local.properties 并填入真实密钥。
+# Copy this file to local.properties and fill in real values.
+# local.properties 已被 .gitignore 排除，不会被提交（local.properties is gitignored, never committed）。
+
+# 阿里云 AccessKey（用于 NLS 语音 token 生成，见 TokenGenerator.kt）
+ALIYUN_ACCESS_KEY_ID=
+ALIYUN_ACCESS_KEY_SECRET=
+
+# DeepSeek API Key（见 DeepSeekService.kt）
+DEEPSEEK_API_KEY=
+
+# 阿里云智能语音 AppKey（见 SpeechService.kt）
+# ASR_APP_KEY_DEFAULT：通用（中文）识别
+# ASR_APP_KEY_ENGLISH：英语专项识别
+ASR_APP_KEY_DEFAULT=
+ASR_APP_KEY_ENGLISH=
