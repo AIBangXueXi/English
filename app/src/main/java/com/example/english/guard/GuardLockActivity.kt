@@ -217,7 +217,6 @@ fun GuardLockScreen(onFinish: () -> Unit) {
                 else -> ReviewFlow(
                     words = words,
                     hasMicPermission = hasMicPermission,
-                    repository = repository,
                     onAllDone = {
                         store.unlockAndReset()
                         onFinish()
@@ -260,7 +259,6 @@ private fun NoWordsToday(onGoStudy: () -> Unit) {
 private fun ReviewFlow(
     words: List<UnknownWord>,
     hasMicPermission: Boolean,
-    repository: WordRepository,
     onAllDone: () -> Unit
 ) {
     val context = LocalContext.current
@@ -302,9 +300,10 @@ private fun ReviewFlow(
     val word = words.getOrNull(index)
 
     fun advance() {
-        val current = words.getOrNull(index) ?: return
-        // 三关都过 → 复用 App 内的复习调度（连续两天答对自动转认识）
-        scope.launch { repository.onUnknownWordCorrect(current) }
+        // 管控复习不记录进度：这里不调用 onUnknownWordCorrect（那会按「连续两天答对转认识」
+        // 提升 stage、满两天还把生词删出 unknown_words）。否则同一天多次触发，今天的生词
+        // 会被逐次掏空，最终 getUnknownWordsByText 查不到 → 误报「今天还没有找到不认识的单词」。
+        // 复习进度只归背单词主流程（WordViewModel）管。
         spellingInput = ""
         manualInput = ""
         hint = null
