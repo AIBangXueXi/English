@@ -84,6 +84,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.english.MainActivity
 import com.example.english.data.DailyTaskStore
+import com.example.english.data.lettersOnly
 import com.example.english.data.WordRepository
 import com.example.english.data.api.DeepSeekService
 import com.example.english.data.entity.UnknownWord
@@ -360,7 +361,7 @@ private fun ReviewFlow(
 
     fun submitSpelling(input: String) {
         if (input.isEmpty()) return
-        if (input.equals(word.word.replace(" ", ""), ignoreCase = true)) {
+        if (lettersOnly(input) == lettersOnly(word.word)) {
             hint = null
             celebrating = true
             playSuccessSound(context)

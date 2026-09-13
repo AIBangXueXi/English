@@ -95,6 +95,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.english.data.lettersOnly
 import com.example.english.data.QuizState
 import com.example.english.data.WordViewModel
 import com.example.english.data.api.DeepSeekService
@@ -240,7 +241,7 @@ fun WordScreen(
     LaunchedEffect(spellingInput, isDictation) {
         if (isDictation && spellingInput.isNotBlank()) {
             val target = currentWord?.word ?: return@LaunchedEffect
-            if (spellingInput.trim().equals(target.replace(" ", ""), ignoreCase = true)) {
+            if (lettersOnly(spellingInput) == lettersOnly(target)) {
                 spellingPassed = true
                 waitingForReading = true
                 showCelebration = true
@@ -1076,7 +1077,7 @@ fun WordScreen(
                             val commitSpelling: () -> Unit = {
                                 val input = spellingInput.trim()
                                 if (input.isNotEmpty()) {
-                                    if (input.equals(word.word.replace(" ", ""), ignoreCase = true)) {
+                                    if (lettersOnly(input) == lettersOnly(word.word)) {
                                         spellingPassed = true
                                         waitingForReading = true
                                         showCelebration = true

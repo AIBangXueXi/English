@@ -49,6 +49,9 @@ fun resolveRawResId(context: Context, source: String): Int {
     return context.resources.getIdentifier(name, "raw", context.packageName)
 }
 
+/** 仅保留英文字母并转小写，用于拼写比对时忽略空格、连字符、撇号等特殊符号。 */
+fun lettersOnly(s: String): String = s.lowercase().filter { it.isLetter() }
+
 /**
  * Download a remote audio URL to a local temp file, then create a MediaPlayer
  * from the local file. This avoids HTTPS/MediaPlayer compatibility issues on

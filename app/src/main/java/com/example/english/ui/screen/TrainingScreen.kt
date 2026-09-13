@@ -84,6 +84,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.english.data.api.DeepSeekService
+import com.example.english.data.lettersOnly
 import com.example.english.data.resolveRawResId
 import com.example.english.data.resolveStaticUrl
 import com.example.english.data.playAudioAwait
@@ -357,7 +358,7 @@ fun TrainingScreen(
         if (mode == TrainingMode.Dictation && !passed && !gaveUp) {
             val target = currentWord?.word ?: return@LaunchedEffect
             if (spellingInput.isNotBlank() &&
-                spellingInput.trim().equals(target.replace(" ", ""), ignoreCase = true)
+                lettersOnly(spellingInput) == lettersOnly(target)
             ) {
                 markPassed()
             }
@@ -702,7 +703,7 @@ fun TrainingScreen(
                             onSpellingDone = {
                                 val input = spellingInput.trim()
                                 if (input.isNotEmpty() &&
-                                    !input.equals(word.word.replace(" ", ""), ignoreCase = true)
+                                    lettersOnly(input) != lettersOnly(word.word)
                                 ) {
                                     spellingError = "拼写有误，再试试"
                                 }
