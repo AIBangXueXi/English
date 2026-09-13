@@ -1838,8 +1838,8 @@ fun DictationLetterBoxes(
                 }
                 Box(
                     modifier = Modifier
-                        .size(56.dp)
-                        .background(bg, RoundedCornerShape(10.dp))
+                        .size(36.dp)
+                        .background(bg, RoundedCornerShape(7.dp))
                         .border(
                             1.dp,
                             MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
