@@ -119,6 +119,8 @@ fun HomeTabScreen(
 
     val done = todayTask.completedCount(unknownLimit)
     val total = todayTask.totalTasks
+    // 其他任务需先完成「背单词发现不认识」后才能解锁
+    val wordsFound = todayTask.unknownFound >= unknownLimit
 
     Scaffold(
         topBar = {
@@ -282,6 +284,7 @@ fun HomeTabScreen(
                         detail = "$meaningPos / $unknownCount",
                         done = todayTask.meaningDone,
                         progress = if (unknownCount == 0) 1f else (meaningPos.toFloat() / unknownCount).coerceIn(0f, 1f),
+                        locked = !wordsFound,
                         onClick = onMeaningTaskClick
                     )
                     TaskItem(
@@ -289,6 +292,7 @@ fun HomeTabScreen(
                         detail = "$pronunciationPos / $unknownCount",
                         done = todayTask.pronunciationDone,
                         progress = if (unknownCount == 0) 1f else (pronunciationPos.toFloat() / unknownCount).coerceIn(0f, 1f),
+                        locked = !wordsFound,
                         onClick = onPronunciationTaskClick
                     )
                     TaskItem(
@@ -296,6 +300,7 @@ fun HomeTabScreen(
                         detail = "$dictationPos / $unknownCount",
                         done = todayTask.dictationDone,
                         progress = if (unknownCount == 0) 1f else (dictationPos.toFloat() / unknownCount).coerceIn(0f, 1f),
+                        locked = !wordsFound,
                         onClick = onDictationTaskClick
                     )
                     TaskItem(
@@ -303,6 +308,7 @@ fun HomeTabScreen(
                         detail = "$matchingPos / $unknownCount",
                         done = todayTask.matchingDone,
                         progress = if (unknownCount == 0) 1f else (matchingPos.toFloat() / unknownCount).coerceIn(0f, 1f),
+                        locked = !wordsFound,
                         onClick = onMatchingTaskClick
                     )
                     TaskItem(
@@ -310,6 +316,7 @@ fun HomeTabScreen(
                         detail = "${todayTask.moErSeconds / 60} / 15 分钟",
                         done = todayTask.moErSeconds >= MO_ER_TARGET_SECONDS,
                         progress = (todayTask.moErSeconds.toFloat() / MO_ER_TARGET_SECONDS).coerceIn(0f, 1f),
+                        locked = !wordsFound,
                         onClick = onMoErTaskClick
                     )
                 }
@@ -421,11 +428,16 @@ private fun TaskItem(
     detail: String,
     done: Boolean,
     progress: Float,
+    locked: Boolean = false,
     onClick: () -> Unit = {}
 ) {
-    val accent = if (done) Color(0xFF1387C0) else Color(0xFFF44336)
+    val accent = when {
+        done -> Color(0xFF1387C0)
+        locked -> Color(0xFFBDBDBD)
+        else -> Color(0xFFF44336)
+    }
     Card(
-        onClick = { if (!done) onClick() },
+        onClick = { if (!done && !locked) onClick() },
         modifier = Modifier
             .fillMaxWidth()
             .padding(bottom = 10.dp),
@@ -455,6 +467,13 @@ private fun TaskItem(
                             modifier = Modifier.size(14.dp),
                             tint = Color.White
                         )
+                    } else if (locked) {
+                        Icon(
+                            imageVector = Icons.Rounded.Lock,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = Color.White
+                        )
                     }
                 }
             }
@@ -463,9 +482,12 @@ private fun TaskItem(
                 Text(
                     text = title,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = if (done) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    else MaterialTheme.colorScheme.onSurface,
-                    fontWeight = if (done) FontWeight.Normal else FontWeight.Medium
+                    color = when {
+                        done -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        locked -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                        else -> MaterialTheme.colorScheme.onSurface
+                    },
+                    fontWeight = if (done || locked) FontWeight.Normal else FontWeight.Medium
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 LinearProgressIndicator(
@@ -479,7 +501,7 @@ private fun TaskItem(
             }
             Spacer(modifier = Modifier.width(10.dp))
             Text(
-                text = detail,
+                text = if (locked) "先背单词" else detail,
                 style = MaterialTheme.typography.bodySmall,
                 color = if (done) accent.copy(alpha = 0.9f)
                 else MaterialTheme.colorScheme.onSurfaceVariant,
