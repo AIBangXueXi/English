@@ -53,10 +53,11 @@ class WordViewModel(application: Application) : AndroidViewModel(application) {
     private val _pendingDailyComplete = MutableStateFlow(false)
     val pendingDailyComplete: StateFlow<Boolean> = _pendingDailyComplete
 
-    init {
-        loadNextWord()
-    }
-
+    // 注意：不在这里 init 自动 loadNextWord()。
+    // 该 ViewModel 通过 viewModel() 在 MainActivity 作用域下获取，是 Activity 级单例——
+    // sync/词库/训练/背单词页面拿到的是同一个实例。若靠 init 加载，state 一旦变成
+    // DailyComplete（今日任务完成）就永远不会在跨天/重新进入时重置。
+    // 改为由背单词页进入时用 LaunchedEffect 显式调用 loadNextWord()（见 MainActivity）。
     fun loadNextWord() {
         viewModelScope.launch {
             _state.value = QuizState.Loading

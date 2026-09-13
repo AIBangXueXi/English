@@ -306,6 +306,10 @@ class MainActivity : ComponentActivity() {
                     }
                     is Screen.WordPage -> {
                         val wordViewModel: WordViewModel = viewModel()
+                        // 进入背单词页时重新加载：wordViewModel 是 Activity 级单例，
+                        // 不能靠 init 只加载一次——否则跨天后 state 仍停在昨天的
+                        // DailyComplete「今日任务已完成」，无法开始新一天的学习。
+                        LaunchedEffect(Unit) { wordViewModel.loadNextWord() }
                         WordScreen(
                             viewModel = wordViewModel,
                             speechService = speechService,
